@@ -1,6 +1,9 @@
 package com.example.billiardtracker.data.remote
 
 import com.example.billiardtracker.data.remote.dto.ClaimRefereeResponse
+import com.example.billiardtracker.data.remote.dto.ClubDto
+import com.example.billiardtracker.data.remote.dto.ClubsListDto
+import com.example.billiardtracker.data.remote.dto.CreateClubBody
 import com.example.billiardtracker.data.remote.dto.CreateShotBody
 import com.example.billiardtracker.data.remote.dto.CreateTournamentBody
 import com.example.billiardtracker.data.remote.dto.FinishGameBody
@@ -22,6 +25,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface ApiService {
     @POST("api/auth/request-code")
@@ -72,4 +76,13 @@ interface ApiService {
 
     @GET("version.json")
     suspend fun getVersionJson(): Response<VersionDto>
+
+    @GET("api/clubs")
+    suspend fun listClubs(
+        @Query("near") near: String? = null,
+        @Query("radiusM") radiusM: Int? = null,
+    ): Response<ClubsListDto>
+
+    @POST("api/clubs")
+    suspend fun createClub(@Body body: CreateClubBody): Response<ClubDto>
 }

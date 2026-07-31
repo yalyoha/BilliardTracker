@@ -39,6 +39,7 @@ fun HomeScreen(
     onOpenTournament: (Long) -> Unit,
     onOpenRules: () -> Unit,
     onOpenSettings: () -> Unit,
+    onAddClub: () -> Unit,
 ) {
     val list by viewModel.tournaments.collectAsStateWithLifecycle()
 
@@ -47,6 +48,7 @@ fun HomeScreen(
             TopAppBar(
                 title = { Text("Мои турниры") },
                 actions = {
+                    TextButton(onClick = onAddClub) { Text("+ Клуб") }
                     TextButton(onClick = onOpenRules) { Text("Правила") }
                     TextButton(onClick = onOpenSettings) { Text("⚙") }
                 },

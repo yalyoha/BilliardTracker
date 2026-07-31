@@ -6,6 +6,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.billiardtracker.di.AppContainer
+import com.example.billiardtracker.ui.screens.club.AddClubScreen
+import com.example.billiardtracker.ui.screens.club.AddClubViewModel
 import com.example.billiardtracker.ui.screens.gametype.PickGameTypeScreen
 import com.example.billiardtracker.ui.screens.gametype.PickGameTypeViewModel
 import com.example.billiardtracker.ui.screens.gametype.StakeSetupScreen
@@ -42,6 +44,7 @@ sealed class Route(val path: String) {
         }
     }
     object Settings : Route("settings")
+    object AddClub : Route("add-club")
 }
 
 @Composable
@@ -55,6 +58,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                 onOpenTournament = { id -> nav.navigate(Route.Tournament.build(id)) },
                 onOpenRules = { nav.navigate(Route.Rules.path) },
                 onOpenSettings = { nav.navigate(Route.Settings.path) },
+                onAddClub = { nav.navigate(Route.AddClub.path) },
             )
         }
         composable(Route.NewTournament.path) {
@@ -118,6 +122,14 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                 currentVersionCode = com.example.billiardtracker.BuildConfig.VERSION_CODE,
             )
             SettingsScreen(vm, onBack = { nav.popBackStack() })
+        }
+        composable(Route.AddClub.path) {
+            val vm = AddClubViewModel(container.clubRepository, container.locationProvider)
+            AddClubScreen(
+                viewModel = vm,
+                onBack = { nav.popBackStack() },
+                onCreated = { nav.popBackStack() },
+            )
         }
     }
 }
