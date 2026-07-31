@@ -144,6 +144,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                     updater = container.updaterRepository,
                     authRepo = container.authRepository,
                     currentVersionCode = com.example.billiardtracker.BuildConfig.VERSION_CODE,
+                    currentVersionName = com.example.billiardtracker.BuildConfig.VERSION_NAME,
                 )
                 SettingsScreen(vm, onBack = { nav.popBackStack() })
             }

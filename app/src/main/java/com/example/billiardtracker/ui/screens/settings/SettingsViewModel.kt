@@ -19,6 +19,7 @@ data class SettingsUiState(
     val checking: Boolean = false,
     val message: String? = null,
     val currentVersionCode: Int = 1,
+    val currentVersionName: String = "?",
 )
 
 class SettingsViewModel(
@@ -26,8 +27,11 @@ class SettingsViewModel(
     private val updater: UpdaterRepository,
     private val authRepo: AuthRepository,
     private val currentVersionCode: Int,
+    private val currentVersionName: String = "?",
 ) : ViewModel() {
-    private val _ui = MutableStateFlow(SettingsUiState(currentVersionCode = currentVersionCode))
+    private val _ui = MutableStateFlow(
+        SettingsUiState(currentVersionCode = currentVersionCode, currentVersionName = currentVersionName)
+    )
     val ui: StateFlow<SettingsUiState> = _ui.asStateFlow()
 
     val autoCheck: StateFlow<Boolean> = updatePrefs.autoCheckFlow

@@ -54,7 +54,10 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Версия: ${ui.currentVersionCode}", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Версия: v${ui.currentVersionName} (сборка ${ui.currentVersionCode})",
+                style = MaterialTheme.typography.bodyMedium,
+            )
 
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
