@@ -8,10 +8,13 @@ import androidx.navigation.compose.rememberNavController
 import com.example.billiardtracker.di.AppContainer
 import com.example.billiardtracker.ui.screens.home.HomeScreen
 import com.example.billiardtracker.ui.screens.home.HomeViewModel
+import com.example.billiardtracker.ui.screens.pick.PickParticipantsScreen
+import com.example.billiardtracker.ui.screens.pick.PickParticipantsViewModel
 
 sealed class Route(val path: String) {
     object Home : Route("home")
-    object NewTournament : Route("new-tournament") // Task 3.5+ will implement
+    object NewTournament : Route("new-tournament") // Task 3.5: PickParticipantsScreen
+    object PickGameType : Route("pick-game-type") // Task 3.6 fills this in
     data class Tournament(val id: Long) : Route("tournament/{id}") {
         companion object {
             const val PATH = "tournament/{id}"
@@ -33,8 +36,16 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
             )
         }
         composable(Route.NewTournament.path) {
-            // TODO Task 3.5: PickParticipantsScreen
-            androidx.compose.material3.Text("New Tournament (Task 3.5)")
+            val vm = PickParticipantsViewModel(container.newTournamentState)
+            PickParticipantsScreen(
+                viewModel = vm,
+                onBack = { nav.popBackStack() },
+                onNext = { nav.navigate(Route.PickGameType.path) },
+            )
+        }
+        composable(Route.PickGameType.path) {
+            // TODO Task 3.6: PickGameTypeScreen + stake/handicap setup
+            androidx.compose.material3.Text("Pick game type (Task 3.6)")
         }
         composable(Route.Tournament.PATH) { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id")?.toLongOrNull() ?: return@composable

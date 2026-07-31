@@ -33,4 +33,6 @@ class AppContainer(context: Context) {
 
     val authRepository = AuthRepository(apiService, userPrefs)
     val tournamentRepository = TournamentRepository(apiService, tournamentDao, participantDao)
+
+    val newTournamentState = com.example.billiardtracker.ui.nav.NewTournamentState()
 }
