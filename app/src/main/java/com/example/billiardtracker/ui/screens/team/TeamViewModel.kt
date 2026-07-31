@@ -3,6 +3,7 @@ package com.example.billiardtracker.ui.screens.team
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.billiardtracker.data.prefs.UserPrefs
+import com.example.billiardtracker.util.digitsToE164
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,10 +52,11 @@ class TeamViewModel(private val prefs: UserPrefs) : ViewModel() {
         )
     }
 
-    fun completeOnboarding(phone: String, name: String) {
+    /** phoneDigits — только цифры (11 max, из PhoneMaskInput). */
+    fun completeOnboarding(phoneDigits: String, name: String) {
         viewModelScope.launch {
             prefs.setLocalProfile(
-                phone.trim().takeIf { it.isNotBlank() },
+                digitsToE164(phoneDigits),
                 name.trim().takeIf { it.isNotBlank() },
             )
             _ui.value = _ui.value.copy(needOnboarding = false)

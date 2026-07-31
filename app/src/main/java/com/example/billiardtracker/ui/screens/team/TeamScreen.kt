@@ -29,6 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.billiardtracker.util.PhoneMaskInput
+import com.example.billiardtracker.util.formatPhone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,12 +64,10 @@ fun TeamScreen(viewModel: TeamViewModel) {
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    OutlinedTextField(
+                    PhoneMaskInput(
                         value = ui.phoneDraft,
-                        onValueChange = viewModel::setPhoneDraft,
-                        label = { Text("Телефон (необязательно)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        singleLine = true,
+                        onChange = viewModel::setPhoneDraft,
+                        label = "Телефон (необязательно)",
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Button(onClick = viewModel::addPlayer, modifier = Modifier.fillMaxWidth()) {
@@ -92,7 +92,10 @@ fun TeamScreen(viewModel: TeamViewModel) {
                                 Column(Modifier.weight(1f)) {
                                     Text(p.name, style = MaterialTheme.typography.bodyMedium)
                                     if (p.phone != null) {
-                                        Text(p.phone, style = MaterialTheme.typography.bodySmall)
+                                        Text(
+                                            formatPhone(p.phone),
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
                                     }
                                 }
                                 TextButton(onClick = { viewModel.removePlayer(i) }) {
@@ -134,18 +137,16 @@ private fun OnboardingDialog(
                     style = MaterialTheme.typography.bodySmall,
                 )
                 OutlinedTextField(
-                    value = phone,
-                    onValueChange = { phone = it },
-                    label = { Text("Твой телефон") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Твоё имя") },
                     singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                PhoneMaskInput(
+                    value = phone,
+                    onChange = { phone = it },
+                    label = "Твой телефон",
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
