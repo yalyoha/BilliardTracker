@@ -20,7 +20,7 @@ fun StakeSetupScreen(
     onCreated: (Long) -> Unit,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { viewModel.init() }
+    LaunchedEffect(Unit) { viewModel.loadFromState() }
     LaunchedEffect(ui.createdTournamentId) { ui.createdTournamentId?.let(onCreated) }
 
     Scaffold(

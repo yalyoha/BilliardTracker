@@ -40,8 +40,13 @@ class StakeSetupViewModel(
     private val _ui = MutableStateFlow(StakeUiState())
     val ui: StateFlow<StakeUiState> = _ui.asStateFlow()
 
-    fun init() {
-        val slug = newTournamentState.gameType.value ?: return
+    init {
+        loadFromState()
+    }
+
+    fun loadFromState() {
+        val slug = newTournamentState.gameType.value
+        if (slug.isNullOrBlank()) return
         val gt = GameType.entries.firstOrNull { it.ruleFileSlug == slug } ?: return
         val profile = RuleProfile.forType(gt)
         val parts = newTournamentState.participants.value
@@ -70,7 +75,11 @@ class StakeSetupViewModel(
     }
 
     fun submit() {
-        val slug = _ui.value.gameTypeSlug
+        val slug = _ui.value.gameTypeSlug.ifBlank { newTournamentState.gameType.value.orEmpty() }
+        if (slug.isBlank()) {
+            _ui.value = _ui.value.copy(error = "Игра не выбрана — вернись назад и выбери")
+            return
+        }
         val moneyKop = _ui.value.stakeRub.toLongOrNull()?.times(100)
         val body = CreateTournamentBody(
             title = _ui.value.title.takeIf { it.isNotBlank() },
