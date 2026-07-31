@@ -58,3 +58,52 @@ data class CreateParticipantBody(
     val handicapPoints: Int = 0,
     val perBallOverrideKop: Long? = null,
 )
+
+@Serializable
+data class GameDto(
+    val id: Long,
+    val tournamentId: Long,
+    val orderIndex: Int,
+    val status: String,
+    val startedAt: Long,
+    val finishedAt: Long? = null,
+    val winnerParticipantId: Long? = null,
+    val scores: List<ScoreDto> = emptyList(),
+)
+
+@Serializable
+data class ScoreDto(val participantId: Long, val points: Int)
+
+@Serializable
+data class GamesListDto(val games: List<GameDto>)
+
+@Serializable
+data class ShotDto(
+    val id: Long,
+    val gameId: Long,
+    val participantId: Long,
+    val kind: String,
+    val ballNumber: Int? = null,
+    val pointsDelta: Int,
+    val ts: Long,
+    val enteredByUserId: Long,
+)
+
+@Serializable
+data class CreateShotBody(
+    val participantId: Long,
+    val kind: String,
+    val ballNumber: Int? = null,
+    val pointsDelta: Int,
+)
+
+@Serializable
+data class FinishGameBody(val winnerParticipantId: Long? = null)
+
+@Serializable
+data class ClaimRefereeResponse(
+    val id: Long,
+    val refereeUserId: Long,
+    val createdByUserId: Long,
+    val status: String,
+)

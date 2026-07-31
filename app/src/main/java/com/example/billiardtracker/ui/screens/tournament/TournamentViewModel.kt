@@ -1,0 +1,105 @@
+package com.example.billiardtracker.ui.screens.tournament
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.billiardtracker.data.prefs.UserPrefs
+import com.example.billiardtracker.data.remote.SseClient
+import com.example.billiardtracker.data.remote.dto.GameDto
+import com.example.billiardtracker.data.remote.dto.TournamentDto
+import com.example.billiardtracker.data.repo.GameRepository
+import com.example.billiardtracker.data.repo.TournamentRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+data class TournamentUiState(
+    val loading: Boolean = true,
+    val error: String? = null,
+    val tournament: TournamentDto? = null,
+    val currentGame: GameDto? = null,
+    val games: List<GameDto> = emptyList(),
+    val myUserId: Long = 0,
+    val lastShotIdPerGame: Map<Long, Long> = emptyMap(),
+) {
+    val isReferee: Boolean
+        get() = tournament != null && tournament.refereeUserId == myUserId
+}
+
+class TournamentViewModel(
+    private val tournamentId: Long,
+    private val tournamentRepo: TournamentRepository,
+    private val gameRepo: GameRepository,
+    private val sseClient: SseClient,
+    private val userPrefs: UserPrefs,
+) : ViewModel() {
+
+    private val _ui = MutableStateFlow(TournamentUiState())
+    val ui: StateFlow<TournamentUiState> = _ui.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val uid = userPrefs.getUserId() ?: 0
+            _ui.value = _ui.value.copy(myUserId = uid)
+            refresh()
+            sseClient.stream(tournamentId).collect { _ ->
+                // On any event, re-fetch state. Simpler than surgical updates for MVP.
+                refresh()
+            }
+        }
+    }
+
+    private suspend fun refresh() {
+        tournamentRepo.fetchDetail(tournamentId).onSuccess { t ->
+            val games = gameRepo.listGames(tournamentId).getOrElse { emptyList() }
+            val active = games.lastOrNull { it.status == "active" } ?: games.lastOrNull()
+            _ui.value = _ui.value.copy(
+                loading = false,
+                tournament = t,
+                games = games,
+                currentGame = active,
+            )
+        }.onFailure {
+            _ui.value = _ui.value.copy(loading = false, error = it.message)
+        }
+    }
+
+    fun startGame() {
+        viewModelScope.launch {
+            gameRepo.startGame(tournamentId).onSuccess { refresh() }
+        }
+    }
+
+    fun addShot(participantId: Long, kind: String, ballNumber: Int?, pointsDelta: Int) {
+        val gid = _ui.value.currentGame?.id ?: return
+        viewModelScope.launch {
+            gameRepo.addShot(gid, participantId, kind, ballNumber, pointsDelta).onSuccess { shot ->
+                _ui.value = _ui.value.copy(
+                    lastShotIdPerGame = _ui.value.lastShotIdPerGame + (gid to shot.id),
+                )
+                refresh()
+            }
+        }
+    }
+
+    fun undoLastShot() {
+        val gid = _ui.value.currentGame?.id ?: return
+        val sid = _ui.value.lastShotIdPerGame[gid] ?: return
+        viewModelScope.launch {
+            gameRepo.deleteShot(gid, sid).onSuccess { refresh() }
+        }
+    }
+
+    fun finishGame(winnerPid: Long?) {
+        val gid = _ui.value.currentGame?.id ?: return
+        viewModelScope.launch {
+            gameRepo.finishGame(tournamentId, gid, winnerPid).onSuccess { refresh() }
+        }
+    }
+
+    fun claimReferee() {
+        viewModelScope.launch {
+            gameRepo.claimReferee(tournamentId).onSuccess { refresh() }
+        }
+    }
+}

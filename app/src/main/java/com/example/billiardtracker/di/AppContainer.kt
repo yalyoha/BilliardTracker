@@ -6,7 +6,9 @@ import com.example.billiardtracker.data.local.AppDatabase
 import com.example.billiardtracker.data.prefs.UserPrefs
 import com.example.billiardtracker.data.remote.ApiService
 import com.example.billiardtracker.data.remote.NetworkModule
+import com.example.billiardtracker.data.remote.SseClient
 import com.example.billiardtracker.data.repo.AuthRepository
+import com.example.billiardtracker.data.repo.GameRepository
 import com.example.billiardtracker.data.repo.TournamentRepository
 
 class AppContainer(context: Context) {
@@ -33,6 +35,11 @@ class AppContainer(context: Context) {
 
     val authRepository = AuthRepository(apiService, userPrefs)
     val tournamentRepository = TournamentRepository(apiService, tournamentDao, participantDao)
+    val gameRepository = GameRepository(apiService)
+    val sseClient = SseClient(
+        baseUrl = "https://billiardtracker.alekseylosev.ru/",
+        prefs = userPrefs,
+    )
 
     val newTournamentState = com.example.billiardtracker.ui.nav.NewTournamentState()
 }

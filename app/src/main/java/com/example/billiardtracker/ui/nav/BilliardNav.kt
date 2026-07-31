@@ -14,6 +14,8 @@ import com.example.billiardtracker.ui.screens.home.HomeScreen
 import com.example.billiardtracker.ui.screens.home.HomeViewModel
 import com.example.billiardtracker.ui.screens.pick.PickParticipantsScreen
 import com.example.billiardtracker.ui.screens.pick.PickParticipantsViewModel
+import com.example.billiardtracker.ui.screens.tournament.TournamentScreen
+import com.example.billiardtracker.ui.screens.tournament.TournamentViewModel
 
 sealed class Route(val path: String) {
     object Home : Route("home")
@@ -77,8 +79,14 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
         }
         composable(Route.Tournament.PATH) { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id")?.toLongOrNull() ?: return@composable
-            // TODO Task 3.7: TournamentScreen
-            androidx.compose.material3.Text("Tournament $id (Task 3.7)")
+            val vm = TournamentViewModel(
+                tournamentId = id,
+                tournamentRepo = container.tournamentRepository,
+                gameRepo = container.gameRepository,
+                sseClient = container.sseClient,
+                userPrefs = container.userPrefs,
+            )
+            TournamentScreen(viewModel = vm, onBack = { nav.popBackStack() })
         }
         composable(Route.RuleDetail.PATH) {
             // TODO Task 3.9: RuleDetail screen
