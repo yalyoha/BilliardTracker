@@ -4,8 +4,10 @@ import com.example.billiardtracker.data.remote.dto.ClaimRefereeResponse
 import com.example.billiardtracker.data.remote.dto.ClubDto
 import com.example.billiardtracker.data.remote.dto.ClubsListDto
 import com.example.billiardtracker.data.remote.dto.CreateClubBody
+import com.example.billiardtracker.data.remote.dto.CreateDonationBody
 import com.example.billiardtracker.data.remote.dto.CreateShotBody
 import com.example.billiardtracker.data.remote.dto.CreateTournamentBody
+import com.example.billiardtracker.data.remote.dto.DonationDto
 import com.example.billiardtracker.data.remote.dto.FinishGameBody
 import com.example.billiardtracker.data.remote.dto.GameDto
 import com.example.billiardtracker.data.remote.dto.GamesListDto
@@ -85,4 +87,7 @@ interface ApiService {
 
     @POST("api/clubs")
     suspend fun createClub(@Body body: CreateClubBody): Response<ClubDto>
+
+    @POST("api/donations")
+    suspend fun createDonation(@Body body: CreateDonationBody): Response<DonationDto>
 }

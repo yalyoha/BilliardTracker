@@ -10,6 +10,7 @@ import com.example.billiardtracker.data.remote.NetworkModule
 import com.example.billiardtracker.data.remote.SseClient
 import com.example.billiardtracker.data.repo.AuthRepository
 import com.example.billiardtracker.data.repo.ClubRepository
+import com.example.billiardtracker.data.repo.DonationRepository
 import com.example.billiardtracker.data.repo.GameRepository
 import com.example.billiardtracker.data.repo.RuleRepository
 import com.example.billiardtracker.data.repo.TournamentRepository
@@ -43,6 +44,7 @@ class AppContainer(context: Context) {
     val ruleRepository = RuleRepository(apiService, ruleDao)
     val updaterRepository = UpdaterRepository(apiService)
     val clubRepository = ClubRepository(apiService)
+    val donationRepository = DonationRepository(apiService)
     val locationProvider = com.example.billiardtracker.data.location.LocationProvider(context.applicationContext)
     val detectClubUseCase = com.example.billiardtracker.domain.usecase.DetectClubUseCase(locationProvider, clubRepository)
     val updatePrefs: UpdatePrefs = UpdatePrefs.create(context.applicationContext)

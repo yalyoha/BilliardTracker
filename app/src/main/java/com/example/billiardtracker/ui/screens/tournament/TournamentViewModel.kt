@@ -4,8 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.billiardtracker.data.prefs.UserPrefs
 import com.example.billiardtracker.data.remote.SseClient
+import com.example.billiardtracker.data.remote.dto.CreateDonationBody
+import com.example.billiardtracker.data.remote.dto.DonationDto
 import com.example.billiardtracker.data.remote.dto.GameDto
 import com.example.billiardtracker.data.remote.dto.TournamentDto
+import com.example.billiardtracker.data.repo.DonationRepository
 import com.example.billiardtracker.data.repo.GameRepository
 import com.example.billiardtracker.data.repo.TournamentRepository
 import com.example.billiardtracker.domain.rules.PayoutCalculator
@@ -37,6 +40,7 @@ class TournamentViewModel(
     private val gameRepo: GameRepository,
     private val sseClient: SseClient,
     private val userPrefs: UserPrefs,
+    private val donationRepo: DonationRepository,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(TournamentUiState())
@@ -107,6 +111,8 @@ class TournamentViewModel(
             gameRepo.claimReferee(tournamentId).onSuccess { refresh() }
         }
     }
+
+    suspend fun donate(body: CreateDonationBody): Result<DonationDto> = donationRepo.create(body)
 
     /**
      * Payout по текущей партии — считается на клиенте из агрегированных счётов.

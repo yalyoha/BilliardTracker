@@ -107,7 +107,11 @@ fun TournamentScreen(
             if (payout != null && tt != null) {
                 PayoutSheet(
                     payout = payout,
+                    tournament = tt,
                     participants = tt.participants,
+                    currentUserId = ui.myUserId,
+                    gameId = ui.currentGame?.id,
+                    onDonate = { body -> viewModel.donate(body) },
                     onDismiss = { showPayout = false },
                 )
             }

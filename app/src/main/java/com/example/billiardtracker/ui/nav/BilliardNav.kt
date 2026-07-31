@@ -98,6 +98,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                 gameRepo = container.gameRepository,
                 sseClient = container.sseClient,
                 userPrefs = container.userPrefs,
+                donationRepo = container.donationRepository,
             )
             TournamentScreen(viewModel = vm, onBack = { nav.popBackStack() })
         }
