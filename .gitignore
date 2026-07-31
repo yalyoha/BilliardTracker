@@ -16,3 +16,6 @@ local.properties
 .env
 .env.local
 *.env
+/monetization.md
+*.keystore
+keystore.properties

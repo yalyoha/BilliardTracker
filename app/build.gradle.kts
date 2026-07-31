@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -21,6 +23,29 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val storeFilePath = System.getenv("BT_KEYSTORE_PATH")
+                ?: rootProject.file("keystore.properties").takeIf { it.exists() }?.let { propsFile ->
+                    val props = Properties()
+                    propsFile.inputStream().use { props.load(it) }
+                    props.getProperty("storeFile")
+                }
+            val keyAliasEnv = System.getenv("BT_KEY_ALIAS") ?: "billiardtracker"
+            val storePasswordEnv = System.getenv("BT_STORE_PASSWORD")
+            val keyPasswordEnv = System.getenv("BT_KEY_PASSWORD")
+
+            if (storeFilePath != null && storePasswordEnv != null && keyPasswordEnv != null) {
+                storeFile = file(storeFilePath)
+                keyAlias = keyAliasEnv
+                storePassword = storePasswordEnv
+                keyPassword = keyPasswordEnv
+            }
+            // If env not set, signing config remains empty — release build will error clearly,
+            // which is fine because unsigned release is not deployable anyway.
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -28,6 +53,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
