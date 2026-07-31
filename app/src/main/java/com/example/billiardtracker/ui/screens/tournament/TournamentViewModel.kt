@@ -7,6 +7,7 @@ import com.example.billiardtracker.data.remote.SseClient
 import com.example.billiardtracker.data.remote.dto.CreateDonationBody
 import com.example.billiardtracker.data.remote.dto.DonationDto
 import com.example.billiardtracker.data.remote.dto.GameDto
+import com.example.billiardtracker.data.remote.dto.ShotDto
 import com.example.billiardtracker.data.remote.dto.TournamentDto
 import com.example.billiardtracker.data.repo.DonationRepository
 import com.example.billiardtracker.data.repo.GameRepository
@@ -30,6 +31,7 @@ data class TournamentUiState(
     val myUserId: Long = 0,
     val myLocalName: String? = null,
     val lastShotIdPerGame: Map<Long, Long> = emptyMap(),
+    val currentGameShots: List<ShotDto> = emptyList(),
 ) {
     val isReferee: Boolean
         get() = tournament != null && tournament.refereeUserId == myUserId
@@ -64,11 +66,15 @@ class TournamentViewModel(
         tournamentRepo.fetchDetail(tournamentId).onSuccess { t ->
             val games = gameRepo.listGames(tournamentId).getOrElse { emptyList() }
             val active = games.lastOrNull { it.status == "active" } ?: games.lastOrNull()
+            val shots = active?.id?.let { gid ->
+                gameRepo.listShots(gid).getOrElse { emptyList() }
+            } ?: emptyList()
             _ui.value = _ui.value.copy(
                 loading = false,
                 tournament = t,
                 games = games,
                 currentGame = active,
+                currentGameShots = shots,
             )
         }.onFailure {
             _ui.value = _ui.value.copy(loading = false, error = it.message)

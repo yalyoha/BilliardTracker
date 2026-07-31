@@ -90,6 +90,9 @@ data class ShotDto(
 )
 
 @Serializable
+data class ShotsListDto(val shots: List<ShotDto>)
+
+@Serializable
 data class CreateShotBody(
     val participantId: Long,
     val kind: String,

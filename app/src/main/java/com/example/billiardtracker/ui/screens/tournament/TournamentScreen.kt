@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
@@ -65,7 +67,9 @@ fun TournamentScreen(
             )
         },
     ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) {
+        Column(
+            Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()),
+        ) {
             if (ui.loading) {
                 CircularProgressIndicator(Modifier.padding(24.dp))
                 return@Column
@@ -103,10 +107,15 @@ fun TournamentScreen(
                         Button(onClick = viewModel::startGame) { Text("Начать партию") }
                     }
                 } else {
+                    val pottedBalls = ui.currentGameShots
+                        .filter { it.kind == "ball" && it.ballNumber != null }
+                        .mapNotNull { it.ballNumber }
+                        .toSet()
                     RefereePanel(
                         participants = t.participants,
                         currentUserId = ui.myUserId,
                         myLocalName = ui.myLocalName,
+                        pottedBalls = pottedBalls,
                         onShot = viewModel::addShot,
                         onUndo = viewModel::undoLastShot,
                         onFinish = viewModel::finishGame,

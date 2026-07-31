@@ -55,7 +55,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                "Версия: v${ui.currentVersionName} (сборка ${ui.currentVersionCode})",
+                "Версия: v${ui.currentVersionName}",
                 style = MaterialTheme.typography.bodyMedium,
             )
 

@@ -4,12 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -19,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.example.billiardtracker.data.remote.dto.ParticipantDto
 
@@ -27,6 +25,7 @@ fun RefereePanel(
     participants: List<ParticipantDto>,
     currentUserId: Long,
     myLocalName: String?,
+    pottedBalls: Set<Int>,
     onShot: (participantId: Long, kind: String, ballNumber: Int?, pointsDelta: Int) -> Unit,
     onUndo: () -> Unit,
     onFinish: (winnerPid: Long?) -> Unit,
@@ -51,15 +50,26 @@ fun RefereePanel(
 
         Divider()
         Text("Забитый шар", style = MaterialTheme.typography.titleSmall)
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(5),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.height(180.dp),
-        ) {
-            items((1..15).toList()) { ball ->
-                OutlinedButton(onClick = { onShot(selectedPid, "ball", ball, 1) }) {
-                    Text("$ball")
+        // 3 ряда по 5 кнопок — обычные Rows чтобы работал nested-scroll
+        // внутри verticalScroll в TournamentScreen. LazyVerticalGrid тут ломает layout.
+        for (row in 0..2) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                for (col in 0..4) {
+                    val ball = row * 5 + col + 1
+                    val potted = ball in pottedBalls
+                    OutlinedButton(
+                        onClick = { onShot(selectedPid, "ball", ball, 1) },
+                        enabled = !potted,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            "$ball",
+                            textDecoration = if (potted) TextDecoration.LineThrough else null,
+                        )
+                    }
                 }
             }
         }

@@ -54,6 +54,14 @@ class GameRepository(private val api: ApiService) {
         Result.failure(e)
     }
 
+    suspend fun listShots(gid: Long): Result<List<ShotDto>> = try {
+        val r = api.listShots(gid)
+        if (r.isSuccessful) Result.success(r.body()!!.shots)
+        else Result.failure(IllegalStateException("HTTP ${r.code()}"))
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
     suspend fun claimReferee(tid: Long): Result<ClaimRefereeResponse> = try {
         val r = api.claimReferee(tid)
         if (r.isSuccessful) Result.success(r.body()!!)

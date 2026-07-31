@@ -15,6 +15,7 @@ import com.example.billiardtracker.data.remote.dto.RequestCodeBody
 import com.example.billiardtracker.data.remote.dto.RequestCodeResponse
 import com.example.billiardtracker.data.remote.dto.RulesListDto
 import com.example.billiardtracker.data.remote.dto.ShotDto
+import com.example.billiardtracker.data.remote.dto.ShotsListDto
 import com.example.billiardtracker.data.remote.dto.TournamentDto
 import com.example.billiardtracker.data.remote.dto.TournamentsListDto
 import com.example.billiardtracker.data.remote.dto.VerifyBody
@@ -66,6 +67,9 @@ interface ApiService {
 
     @DELETE("api/games/{gid}/shots/{sid}")
     suspend fun deleteShot(@Path("gid") gid: Long, @Path("sid") sid: Long): Response<Unit>
+
+    @GET("api/games/{gid}/shots")
+    suspend fun listShots(@Path("gid") gid: Long): Response<ShotsListDto>
 
     @POST("api/tournaments/{id}/claim-referee")
     suspend fun claimReferee(@Path("id") id: Long): Response<ClaimRefereeResponse>
