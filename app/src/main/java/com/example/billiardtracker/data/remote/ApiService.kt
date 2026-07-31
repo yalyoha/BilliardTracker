@@ -6,6 +6,7 @@ import com.example.billiardtracker.data.remote.dto.ClubsListDto
 import com.example.billiardtracker.data.remote.dto.CreateClubBody
 import com.example.billiardtracker.data.remote.dto.CreateDonationBody
 import com.example.billiardtracker.data.remote.dto.CreateShotBody
+import com.example.billiardtracker.data.remote.dto.CreateTokenBody
 import com.example.billiardtracker.data.remote.dto.CreateTournamentBody
 import com.example.billiardtracker.data.remote.dto.DonationDto
 import com.example.billiardtracker.data.remote.dto.FinishGameBody
@@ -13,9 +14,12 @@ import com.example.billiardtracker.data.remote.dto.GameDto
 import com.example.billiardtracker.data.remote.dto.GamesListDto
 import com.example.billiardtracker.data.remote.dto.RequestCodeBody
 import com.example.billiardtracker.data.remote.dto.RequestCodeResponse
+import com.example.billiardtracker.data.remote.dto.RotateTokenResponse
 import com.example.billiardtracker.data.remote.dto.RulesListDto
 import com.example.billiardtracker.data.remote.dto.ShotDto
 import com.example.billiardtracker.data.remote.dto.ShotsListDto
+import com.example.billiardtracker.data.remote.dto.TokenDto
+import com.example.billiardtracker.data.remote.dto.TokensListDto
 import com.example.billiardtracker.data.remote.dto.TournamentDto
 import com.example.billiardtracker.data.remote.dto.TournamentsListDto
 import com.example.billiardtracker.data.remote.dto.VerifyBody
@@ -94,4 +98,17 @@ interface ApiService {
 
     @POST("api/donations")
     suspend fun createDonation(@Body body: CreateDonationBody): Response<DonationDto>
+
+    // Master-tokens (share paths for public read-only view of your games).
+    @POST("api/tokens")
+    suspend fun createToken(@Body body: CreateTokenBody): Response<TokenDto>
+
+    @GET("api/tokens/mine")
+    suspend fun listTokens(): Response<TokensListDto>
+
+    @POST("api/tokens/{id}/rotate")
+    suspend fun rotateToken(@Path("id") id: Long): Response<RotateTokenResponse>
+
+    @DELETE("api/tokens/{id}")
+    suspend fun deleteToken(@Path("id") id: Long): Response<Unit>
 }

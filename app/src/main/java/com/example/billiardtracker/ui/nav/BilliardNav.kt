@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -96,7 +97,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
                 TABS.forEach { tab ->
                     val selected = when {
                         currentRoute == tab.route -> true
@@ -119,6 +120,13 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                         },
                         icon = { Icon(tab.icon, contentDescription = tab.label) },
                         alwaysShowLabel = false,
+                        colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                            selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                            indicatorColor = MaterialTheme.colorScheme.primary,
+                            unselectedIconColor = MaterialTheme.colorScheme.primary,
+                            unselectedTextColor = MaterialTheme.colorScheme.primary,
+                        ),
                     )
                 }
             }
@@ -157,10 +165,12 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                     updatePrefs = container.updatePrefs,
                     updater = container.updaterRepository,
                     authRepo = container.authRepository,
+                    tokenRepo = container.tokenRepository,
+                    userPrefs = container.userPrefs,
                     currentVersionCode = com.example.billiardtracker.BuildConfig.VERSION_CODE,
                     currentVersionName = com.example.billiardtracker.BuildConfig.VERSION_NAME,
                 )
-                SettingsScreen(vm, onBack = { nav.popBackStack() })
+                SettingsScreen(vm, container.authRepository, onBack = { nav.popBackStack() })
             }
 
             // sub-routes

@@ -17,8 +17,8 @@ android {
         applicationId = "com.example.billiardtracker"
         minSdk = 28
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.0.5"
+        versionCode = 22
+        versionName = "1.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -48,7 +48,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
