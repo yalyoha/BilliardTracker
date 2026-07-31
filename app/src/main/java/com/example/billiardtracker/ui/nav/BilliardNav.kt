@@ -6,6 +6,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.billiardtracker.di.AppContainer
+import com.example.billiardtracker.ui.screens.gametype.PickGameTypeScreen
+import com.example.billiardtracker.ui.screens.gametype.PickGameTypeViewModel
+import com.example.billiardtracker.ui.screens.gametype.StakeSetupScreen
+import com.example.billiardtracker.ui.screens.gametype.StakeSetupViewModel
 import com.example.billiardtracker.ui.screens.home.HomeScreen
 import com.example.billiardtracker.ui.screens.home.HomeViewModel
 import com.example.billiardtracker.ui.screens.pick.PickParticipantsScreen
@@ -14,7 +18,8 @@ import com.example.billiardtracker.ui.screens.pick.PickParticipantsViewModel
 sealed class Route(val path: String) {
     object Home : Route("home")
     object NewTournament : Route("new-tournament") // Task 3.5: PickParticipantsScreen
-    object PickGameType : Route("pick-game-type") // Task 3.6 fills this in
+    object PickGameType : Route("pick-game-type")
+    object StakeSetup : Route("stake-setup")
     data class Tournament(val id: Long) : Route("tournament/{id}") {
         companion object {
             const val PATH = "tournament/{id}"
@@ -22,6 +27,12 @@ sealed class Route(val path: String) {
         }
     }
     object Rules : Route("rules") // Task 3.9
+    data class RuleDetail(val slug: String) : Route("rules/{slug}") {
+        companion object {
+            const val PATH = "rules/{slug}"
+            fun build(slug: String) = "rules/$slug"
+        }
+    }
 }
 
 @Composable
@@ -44,13 +55,34 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
             )
         }
         composable(Route.PickGameType.path) {
-            // TODO Task 3.6: PickGameTypeScreen + stake/handicap setup
-            androidx.compose.material3.Text("Pick game type (Task 3.6)")
+            val vm = PickGameTypeViewModel(container.newTournamentState)
+            PickGameTypeScreen(
+                viewModel = vm,
+                onBack = { nav.popBackStack() },
+                onOpenRules = { slug -> nav.navigate(Route.RuleDetail.build(slug)) },
+                onNext = { nav.navigate(Route.StakeSetup.path) },
+            )
+        }
+        composable(Route.StakeSetup.path) {
+            val vm = StakeSetupViewModel(container.newTournamentState, container.tournamentRepository)
+            StakeSetupScreen(
+                viewModel = vm,
+                onBack = { nav.popBackStack() },
+                onCreated = { id ->
+                    nav.navigate(Route.Tournament.build(id)) {
+                        popUpTo(Route.Home.path) { inclusive = false }
+                    }
+                },
+            )
         }
         composable(Route.Tournament.PATH) { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id")?.toLongOrNull() ?: return@composable
             // TODO Task 3.7: TournamentScreen
             androidx.compose.material3.Text("Tournament $id (Task 3.7)")
+        }
+        composable(Route.RuleDetail.PATH) {
+            // TODO Task 3.9: RuleDetail screen
+            androidx.compose.material3.Text("Rule detail (Task 3.9)")
         }
     }
 }
