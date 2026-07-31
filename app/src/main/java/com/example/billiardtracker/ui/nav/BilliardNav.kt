@@ -118,7 +118,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                             }
                         },
                         icon = { Icon(tab.icon, contentDescription = tab.label) },
-                        label = { Text(tab.label) },
+                        alwaysShowLabel = false,
                     )
                 }
             }
