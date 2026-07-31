@@ -1,0 +1,199 @@
+{
+  "_comment": "Canonical expected RuleProfile values for all 14 disciplines. Single source of truth for Android + backend parity. DO NOT edit without updating BOTH tests. Keyed by GameType.ruleFileSlug. `notes` and `type` fields intentionally omitted — `notes` is prose that drifts naturally; `type` on backend equals the slug key. If you edit this file, keep app/src/test/resources/rule-profiles-expected.json in sync (it is a copy).",
+
+  "svobodnaya-piramida": {
+    "ballValues": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "winTargetPoints": 8,
+    "winTargetBalls": null,
+    "allowsSvoiak": true,
+    "svoiakReturnedToHome": false,
+    "alternatesTurnAlways": false,
+    "allowsHandicap": true,
+    "allowsDouble": false,
+    "tabbedBallsAllowed": false,
+    "moneyPlayable": true,
+    "hasContinuation": false
+  },
+
+  "kombinirovannaya-piramida": {
+    "ballValues": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "winTargetPoints": 8,
+    "winTargetBalls": null,
+    "allowsSvoiak": true,
+    "svoiakReturnedToHome": true,
+    "alternatesTurnAlways": false,
+    "allowsHandicap": true,
+    "allowsDouble": false,
+    "tabbedBallsAllowed": false,
+    "moneyPlayable": true,
+    "hasContinuation": false
+  },
+
+  "dinamichnaya-piramida": {
+    "ballValues": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "winTargetPoints": 8,
+    "winTargetBalls": null,
+    "allowsSvoiak": true,
+    "svoiakReturnedToHome": false,
+    "alternatesTurnAlways": false,
+    "allowsHandicap": true,
+    "allowsDouble": false,
+    "tabbedBallsAllowed": false,
+    "moneyPlayable": true,
+    "hasContinuation": false
+  },
+
+  "klassicheskaya-piramida": {
+    "ballValues": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "winTargetPoints": 71,
+    "winTargetBalls": null,
+    "allowsSvoiak": false,
+    "svoiakReturnedToHome": false,
+    "alternatesTurnAlways": false,
+    "allowsHandicap": true,
+    "allowsDouble": false,
+    "tabbedBallsAllowed": false,
+    "moneyPlayable": true,
+    "hasContinuation": false
+  },
+
+  "svobodnaya-s-prodolzheniem": {
+    "ballValues": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "winTargetPoints": 50,
+    "winTargetBalls": null,
+    "allowsSvoiak": true,
+    "svoiakReturnedToHome": false,
+    "alternatesTurnAlways": false,
+    "allowsHandicap": true,
+    "allowsDouble": false,
+    "tabbedBallsAllowed": false,
+    "moneyPlayable": true,
+    "hasContinuation": true
+  },
+
+  "malaya-russkaya-partiya": {
+    "ballValues": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "winTargetPoints": 61,
+    "winTargetBalls": null,
+    "allowsSvoiak": false,
+    "svoiakReturnedToHome": false,
+    "alternatesTurnAlways": false,
+    "allowsHandicap": true,
+    "allowsDouble": false,
+    "tabbedBallsAllowed": false,
+    "moneyPlayable": true,
+    "hasContinuation": false
+  },
+
+  "bolshaya-russkaya-partiya": {
+    "ballValues": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "winTargetPoints": 71,
+    "winTargetBalls": null,
+    "allowsSvoiak": false,
+    "svoiakReturnedToHome": false,
+    "alternatesTurnAlways": false,
+    "allowsHandicap": true,
+    "allowsDouble": false,
+    "tabbedBallsAllowed": false,
+    "moneyPlayable": true,
+    "hasContinuation": false
+  },
+
+  "alagyor": {
+    "ballValues": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "winTargetPoints": null,
+    "winTargetBalls": null,
+    "allowsSvoiak": false,
+    "svoiakReturnedToHome": false,
+    "alternatesTurnAlways": true,
+    "allowsHandicap": false,
+    "allowsDouble": false,
+    "tabbedBallsAllowed": false,
+    "moneyPlayable": true,
+    "hasContinuation": false
+  },
+
+  "yaroslavskaya-piramida": {
+    "ballValues": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "winTargetPoints": 8,
+    "winTargetBalls": null,
+    "allowsSvoiak": true,
+    "svoiakReturnedToHome": true,
+    "alternatesTurnAlways": false,
+    "allowsHandicap": true,
+    "allowsDouble": false,
+    "tabbedBallsAllowed": false,
+    "moneyPlayable": true,
+    "hasContinuation": false
+  },
+
+  "kolkhoz": {
+    "ballValues": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "winTargetPoints": null,
+    "winTargetBalls": null,
+    "allowsSvoiak": false,
+    "svoiakReturnedToHome": false,
+    "alternatesTurnAlways": true,
+    "allowsHandicap": false,
+    "allowsDouble": false,
+    "tabbedBallsAllowed": false,
+    "moneyPlayable": true,
+    "hasContinuation": false
+  },
+
+  "fishki": {
+    "ballValues": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "winTargetPoints": 100,
+    "winTargetBalls": null,
+    "allowsSvoiak": false,
+    "svoiakReturnedToHome": false,
+    "alternatesTurnAlways": false,
+    "allowsHandicap": true,
+    "allowsDouble": false,
+    "tabbedBallsAllowed": true,
+    "moneyPlayable": true,
+    "hasContinuation": false
+  },
+
+  "odin-karman": {
+    "ballValues": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "winTargetPoints": null,
+    "winTargetBalls": 8,
+    "allowsSvoiak": false,
+    "svoiakReturnedToHome": false,
+    "alternatesTurnAlways": false,
+    "allowsHandicap": true,
+    "allowsDouble": false,
+    "tabbedBallsAllowed": false,
+    "moneyPlayable": true,
+    "hasContinuation": false
+  },
+
+  "grosh": {
+    "ballValues": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "winTargetPoints": null,
+    "winTargetBalls": null,
+    "allowsSvoiak": false,
+    "svoiakReturnedToHome": false,
+    "alternatesTurnAlways": true,
+    "allowsHandicap": false,
+    "allowsDouble": false,
+    "tabbedBallsAllowed": false,
+    "moneyPlayable": true,
+    "hasContinuation": false
+  },
+
+  "evropeyskaya-piramida": {
+    "ballValues": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "winTargetPoints": 8,
+    "winTargetBalls": null,
+    "allowsSvoiak": true,
+    "svoiakReturnedToHome": false,
+    "alternatesTurnAlways": false,
+    "allowsHandicap": true,
+    "allowsDouble": false,
+    "tabbedBallsAllowed": false,
+    "moneyPlayable": true,
+    "hasContinuation": false
+  }
+}
