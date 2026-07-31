@@ -7,6 +7,7 @@ import com.example.billiardtracker.data.prefs.UserPrefs
 import com.example.billiardtracker.data.remote.ApiService
 import com.example.billiardtracker.data.remote.NetworkModule
 import com.example.billiardtracker.data.repo.AuthRepository
+import com.example.billiardtracker.data.repo.TournamentRepository
 
 class AppContainer(context: Context) {
     val db: AppDatabase = Room.databaseBuilder(
@@ -31,4 +32,5 @@ class AppContainer(context: Context) {
     val apiService: ApiService = retrofit.create(ApiService::class.java)
 
     val authRepository = AuthRepository(apiService, userPrefs)
+    val tournamentRepository = TournamentRepository(apiService, tournamentDao, participantDao)
 }

@@ -5,16 +5,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.billiardtracker.ui.nav.BilliardNavHost
 import com.example.billiardtracker.ui.screens.auth.AuthViewModel
 import com.example.billiardtracker.ui.screens.auth.PhoneAuthScreen
 import com.example.billiardtracker.ui.theme.BilliardTrackerTheme
@@ -44,10 +42,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     if (authed) {
-                        Text(
-                            "Ты в системе!",
-                            modifier = Modifier.padding(24.dp),
-                        )
+                        BilliardNavHost(container = container)
                     } else {
                         PhoneAuthScreen(
                             viewModel = vm,
