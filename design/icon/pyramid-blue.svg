@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <title>BilliardTracker — синее сукно</title>
+  <defs>
+    <radialGradient id="feltB" cx="30%" cy="20%" r="90%">
+      <stop offset="0%" stop-color="#3B6DC7"/>
+      <stop offset="100%" stop-color="#122556"/>
+    </radialGradient>
+    <radialGradient id="ballB" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="70%" stop-color="#F0EEDC"/>
+      <stop offset="100%" stop-color="#B7B097"/>
+    </radialGradient>
+  </defs>
+  <rect width="108" height="108" fill="url(#feltB)"/>
+  <g stroke="#081029" stroke-width="0.4">
+    <circle cx="54" cy="33.22" r="6" fill="url(#ballB)"/>
+    <circle cx="48" cy="43.61" r="6" fill="url(#ballB)"/>
+    <circle cx="60" cy="43.61" r="6" fill="url(#ballB)"/>
+    <circle cx="42" cy="54"    r="6" fill="url(#ballB)"/>
+    <circle cx="54" cy="54"    r="6" fill="url(#ballB)"/>
+    <circle cx="66" cy="54"    r="6" fill="url(#ballB)"/>
+    <circle cx="36" cy="64.39" r="6" fill="url(#ballB)"/>
+    <circle cx="48" cy="64.39" r="6" fill="url(#ballB)"/>
+    <circle cx="60" cy="64.39" r="6" fill="url(#ballB)"/>
+    <circle cx="72" cy="64.39" r="6" fill="url(#ballB)"/>
+    <circle cx="30" cy="74.78" r="6" fill="url(#ballB)"/>
+    <circle cx="42" cy="74.78" r="6" fill="url(#ballB)"/>
+    <circle cx="54" cy="74.78" r="6" fill="url(#ballB)"/>
+    <circle cx="66" cy="74.78" r="6" fill="url(#ballB)"/>
+    <circle cx="78" cy="74.78" r="6" fill="url(#ballB)"/>
+  </g>
+</svg>
