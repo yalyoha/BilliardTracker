@@ -14,6 +14,10 @@ import com.example.billiardtracker.ui.screens.home.HomeScreen
 import com.example.billiardtracker.ui.screens.home.HomeViewModel
 import com.example.billiardtracker.ui.screens.pick.PickParticipantsScreen
 import com.example.billiardtracker.ui.screens.pick.PickParticipantsViewModel
+import com.example.billiardtracker.ui.screens.rules.RuleDetailScreen
+import com.example.billiardtracker.ui.screens.rules.RuleDetailViewModel
+import com.example.billiardtracker.ui.screens.rules.RulesListScreen
+import com.example.billiardtracker.ui.screens.rules.RulesListViewModel
 import com.example.billiardtracker.ui.screens.tournament.TournamentScreen
 import com.example.billiardtracker.ui.screens.tournament.TournamentViewModel
 
@@ -46,6 +50,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                 viewModel = vm,
                 onNewTournament = { nav.navigate(Route.NewTournament.path) },
                 onOpenTournament = { id -> nav.navigate(Route.Tournament.build(id)) },
+                onOpenRules = { nav.navigate(Route.Rules.path) },
             )
         }
         composable(Route.NewTournament.path) {
@@ -88,9 +93,18 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
             )
             TournamentScreen(viewModel = vm, onBack = { nav.popBackStack() })
         }
-        composable(Route.RuleDetail.PATH) {
-            // TODO Task 3.9: RuleDetail screen
-            androidx.compose.material3.Text("Rule detail (Task 3.9)")
+        composable(Route.Rules.path) {
+            val vm = RulesListViewModel(container.ruleRepository)
+            RulesListScreen(
+                viewModel = vm,
+                onBack = { nav.popBackStack() },
+                onOpen = { slug -> nav.navigate(Route.RuleDetail.build(slug)) },
+            )
+        }
+        composable(Route.RuleDetail.PATH) { backStackEntry ->
+            val slug = backStackEntry.arguments?.getString("slug") ?: return@composable
+            val vm = RuleDetailViewModel(slug, container.ruleRepository)
+            RuleDetailScreen(viewModel = vm, onBack = { nav.popBackStack() })
         }
     }
 }

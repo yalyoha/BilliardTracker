@@ -8,11 +8,13 @@ import com.example.billiardtracker.data.remote.dto.GameDto
 import com.example.billiardtracker.data.remote.dto.GamesListDto
 import com.example.billiardtracker.data.remote.dto.RequestCodeBody
 import com.example.billiardtracker.data.remote.dto.RequestCodeResponse
+import com.example.billiardtracker.data.remote.dto.RulesListDto
 import com.example.billiardtracker.data.remote.dto.ShotDto
 import com.example.billiardtracker.data.remote.dto.TournamentDto
 import com.example.billiardtracker.data.remote.dto.TournamentsListDto
 import com.example.billiardtracker.data.remote.dto.VerifyBody
 import com.example.billiardtracker.data.remote.dto.VerifyResponse
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -60,4 +62,10 @@ interface ApiService {
 
     @POST("api/tournaments/{id}/claim-referee")
     suspend fun claimReferee(@Path("id") id: Long): Response<ClaimRefereeResponse>
+
+    @GET("api/rules")
+    suspend fun listRules(): Response<RulesListDto>
+
+    @GET("api/rules/{slug}")
+    suspend fun getRuleMarkdown(@Path("slug") slug: String): Response<ResponseBody>
 }

@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,11 +37,19 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onNewTournament: () -> Unit,
     onOpenTournament: (Long) -> Unit,
+    onOpenRules: () -> Unit,
 ) {
     val list by viewModel.tournaments.collectAsStateWithLifecycle()
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Мои турниры") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Мои турниры") },
+                actions = {
+                    TextButton(onClick = onOpenRules) { Text("Правила") }
+                },
+            )
+        },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onNewTournament,

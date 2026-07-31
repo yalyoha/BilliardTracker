@@ -9,6 +9,7 @@ import com.example.billiardtracker.data.remote.NetworkModule
 import com.example.billiardtracker.data.remote.SseClient
 import com.example.billiardtracker.data.repo.AuthRepository
 import com.example.billiardtracker.data.repo.GameRepository
+import com.example.billiardtracker.data.repo.RuleRepository
 import com.example.billiardtracker.data.repo.TournamentRepository
 
 class AppContainer(context: Context) {
@@ -36,6 +37,7 @@ class AppContainer(context: Context) {
     val authRepository = AuthRepository(apiService, userPrefs)
     val tournamentRepository = TournamentRepository(apiService, tournamentDao, participantDao)
     val gameRepository = GameRepository(apiService)
+    val ruleRepository = RuleRepository(apiService, ruleDao)
     val sseClient = SseClient(
         baseUrl = "https://billiardtracker.alekseylosev.ru/",
         prefs = userPrefs,
