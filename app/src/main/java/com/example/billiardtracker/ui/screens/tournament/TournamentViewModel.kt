@@ -8,6 +8,11 @@ import com.example.billiardtracker.data.remote.dto.GameDto
 import com.example.billiardtracker.data.remote.dto.TournamentDto
 import com.example.billiardtracker.data.repo.GameRepository
 import com.example.billiardtracker.data.repo.TournamentRepository
+import com.example.billiardtracker.domain.rules.PayoutCalculator
+import com.example.billiardtracker.domain.rules.PayoutInputParticipant
+import com.example.billiardtracker.domain.rules.PayoutInputShot
+import com.example.billiardtracker.domain.rules.PayoutInputTournament
+import com.example.billiardtracker.domain.rules.PayoutResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -102,4 +107,38 @@ class TournamentViewModel(
             gameRepo.claimReferee(tournamentId).onSuccess { refresh() }
         }
     }
+
+    /**
+     * Payout по текущей партии — считается на клиенте из агрегированных счётов.
+     *
+     * Аппроксимация: GET /api/games/:gid отдаёт только суммарные scores, а не
+     * сырые shots. Мы реконструируем pseudo-shots (по 1 pointsDelta на очко),
+     * которые PayoutCalculator суммирует обратно в те же самые scores. Итог
+     * математически идентичен передаче реальных shots, потому что калькулятор
+     * учитывает только сумму pointsDelta на игрока.
+     *
+     * TODO (Task 3.8b+): когда backend выставит /api/games/:gid/shots, читать
+     * настоящие shots для полной точности (важно для аудита штрафов и т.п.).
+     */
+    val payout: PayoutResult?
+        get() {
+            val t = _ui.value.tournament ?: return null
+            val g = _ui.value.currentGame ?: return null
+            val shots = g.scores.flatMap { s ->
+                List(s.points.coerceAtLeast(0)) {
+                    PayoutInputShot(participantId = s.participantId, kind = "ball", pointsDelta = 1)
+                }
+            }
+            return PayoutCalculator.compute(
+                tournament = PayoutInputTournament(id = t.id, moneyPerBallKop = t.moneyPerBallKop),
+                participants = t.participants.map {
+                    PayoutInputParticipant(
+                        id = it.id,
+                        handicapPoints = it.handicapPoints,
+                        perBallOverrideKop = it.perBallOverrideKop,
+                    )
+                },
+                shots = shots,
+            )
+        }
 }

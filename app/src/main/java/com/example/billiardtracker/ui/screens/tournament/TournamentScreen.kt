@@ -17,6 +17,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,6 +32,7 @@ fun TournamentScreen(
     onBack: () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    var showPayout by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -36,6 +40,9 @@ fun TournamentScreen(
                 title = { Text(ui.tournament?.title ?: "Турнир") },
                 navigationIcon = { TextButton(onClick = onBack) { Text("Назад") } },
                 actions = {
+                    if (ui.currentGame?.status == "finished") {
+                        TextButton(onClick = { showPayout = true }) { Text("Итог") }
+                    }
                     if (!ui.isReferee) {
                         TextButton(onClick = viewModel::claimReferee) { Text("Маркёр →") }
                     }
@@ -91,6 +98,18 @@ fun TournamentScreen(
                 val refereeName =
                     t.participants.firstOrNull { it.userId == t.refereeUserId }?.displayName ?: "?"
                 ObserverPanel(refereeName = refereeName)
+            }
+        }
+
+        if (showPayout) {
+            val payout = viewModel.payout
+            val tt = ui.tournament
+            if (payout != null && tt != null) {
+                PayoutSheet(
+                    payout = payout,
+                    participants = tt.participants,
+                    onDismiss = { showPayout = false },
+                )
             }
         }
     }

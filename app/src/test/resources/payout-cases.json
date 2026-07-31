@@ -1,0 +1,155 @@
+{
+  "_comment": "Payout scenarios — used by both backend test/payout.test.js and Android test/PayoutCalculatorTest.kt. Must stay in sync. Both engines must produce identical output for each case.",
+  "cases": [
+    {
+      "name": "two players, 100 rub/ball, alice wins 8-5",
+      "input": {
+        "tournament": { "id": 1, "moneyPerBallKop": 10000 },
+        "participants": [
+          { "id": 1, "handicapPoints": 0, "perBallOverrideKop": null },
+          { "id": 2, "handicapPoints": 0, "perBallOverrideKop": null }
+        ],
+        "shots": [
+          {"participantId": 1, "kind": "ball", "pointsDelta": 1},
+          {"participantId": 1, "kind": "ball", "pointsDelta": 1},
+          {"participantId": 1, "kind": "ball", "pointsDelta": 1},
+          {"participantId": 1, "kind": "ball", "pointsDelta": 1},
+          {"participantId": 1, "kind": "ball", "pointsDelta": 1},
+          {"participantId": 1, "kind": "ball", "pointsDelta": 1},
+          {"participantId": 1, "kind": "ball", "pointsDelta": 1},
+          {"participantId": 1, "kind": "ball", "pointsDelta": 1},
+          {"participantId": 2, "kind": "ball", "pointsDelta": 1},
+          {"participantId": 2, "kind": "ball", "pointsDelta": 1},
+          {"participantId": 2, "kind": "ball", "pointsDelta": 1},
+          {"participantId": 2, "kind": "ball", "pointsDelta": 1},
+          {"participantId": 2, "kind": "ball", "pointsDelta": 1}
+        ]
+      },
+      "expected": {
+        "scores": {"1": 8, "2": 5},
+        "payouts": [
+          {"fromParticipantId": 2, "toParticipantId": 1, "amountKop": 30000}
+        ]
+      }
+    },
+    {
+      "name": "weaker player has 50 rub/ball override, wins 5-8",
+      "input": {
+        "tournament": { "id": 2, "moneyPerBallKop": 10000 },
+        "participants": [
+          { "id": 1, "handicapPoints": 0, "perBallOverrideKop": null },
+          { "id": 2, "handicapPoints": 0, "perBallOverrideKop": 5000 }
+        ],
+        "shots": [
+          {"participantId": 1, "kind": "ball", "pointsDelta": 5},
+          {"participantId": 2, "kind": "ball", "pointsDelta": 8}
+        ]
+      },
+      "expected": {
+        "scores": {"1": 5, "2": 8},
+        "payouts": [
+          {"fromParticipantId": 1, "toParticipantId": 2, "amountKop": 15000}
+        ]
+      }
+    },
+    {
+      "name": "handicap +3 for weaker player equalizes near-tie",
+      "input": {
+        "tournament": { "id": 3, "moneyPerBallKop": 10000 },
+        "participants": [
+          { "id": 1, "handicapPoints": 0, "perBallOverrideKop": null },
+          { "id": 2, "handicapPoints": 3, "perBallOverrideKop": null }
+        ],
+        "shots": [
+          {"participantId": 1, "kind": "ball", "pointsDelta": 8},
+          {"participantId": 2, "kind": "ball", "pointsDelta": 5}
+        ]
+      },
+      "expected": {
+        "scores": {"1": 8, "2": 8},
+        "payouts": []
+      }
+    },
+    {
+      "name": "no money game (moneyPerBallKop=null)",
+      "input": {
+        "tournament": { "id": 4, "moneyPerBallKop": null },
+        "participants": [
+          { "id": 1, "handicapPoints": 0, "perBallOverrideKop": null },
+          { "id": 2, "handicapPoints": 0, "perBallOverrideKop": null }
+        ],
+        "shots": [
+          {"participantId": 1, "kind": "ball", "pointsDelta": 8},
+          {"participantId": 2, "kind": "ball", "pointsDelta": 5}
+        ]
+      },
+      "expected": {
+        "scores": {"1": 8, "2": 5},
+        "payouts": []
+      }
+    },
+    {
+      "name": "3 players free-for-all, alice 10 bob 5 charlie 3 at 100/ball",
+      "input": {
+        "tournament": { "id": 5, "moneyPerBallKop": 10000 },
+        "participants": [
+          { "id": 1, "handicapPoints": 0, "perBallOverrideKop": null },
+          { "id": 2, "handicapPoints": 0, "perBallOverrideKop": null },
+          { "id": 3, "handicapPoints": 0, "perBallOverrideKop": null }
+        ],
+        "shots": [
+          {"participantId": 1, "kind": "ball", "pointsDelta": 10},
+          {"participantId": 2, "kind": "ball", "pointsDelta": 5},
+          {"participantId": 3, "kind": "ball", "pointsDelta": 3}
+        ]
+      },
+      "expected": {
+        "scores": {"1": 10, "2": 5, "3": 3},
+        "payouts": [
+          {"fromParticipantId": 2, "toParticipantId": 1, "amountKop": 50000},
+          {"fromParticipantId": 3, "toParticipantId": 1, "amountKop": 70000},
+          {"fromParticipantId": 3, "toParticipantId": 2, "amountKop": 20000}
+        ]
+      }
+    },
+    {
+      "name": "foul deducts a point via negative pointsDelta",
+      "input": {
+        "tournament": { "id": 6, "moneyPerBallKop": 10000 },
+        "participants": [
+          { "id": 1, "handicapPoints": 0, "perBallOverrideKop": null },
+          { "id": 2, "handicapPoints": 0, "perBallOverrideKop": null }
+        ],
+        "shots": [
+          {"participantId": 1, "kind": "ball", "pointsDelta": 5},
+          {"participantId": 1, "kind": "foul", "pointsDelta": -1},
+          {"participantId": 2, "kind": "ball", "pointsDelta": 3}
+        ]
+      },
+      "expected": {
+        "scores": {"1": 4, "2": 3},
+        "payouts": [
+          {"fromParticipantId": 2, "toParticipantId": 1, "amountKop": 10000}
+        ]
+      }
+    },
+    {
+      "name": "tie in 2-player game — no payout",
+      "input": {
+        "tournament": { "id": 7, "moneyPerBallKop": 10000 },
+        "participants": [
+          { "id": 1, "handicapPoints": 0, "perBallOverrideKop": null },
+          { "id": 2, "handicapPoints": 0, "perBallOverrideKop": null }
+        ],
+        "shots": [
+          {"participantId": 1, "kind": "ball", "pointsDelta": 5},
+          {"participantId": 2, "kind": "ball", "pointsDelta": 5}
+        ]
+      },
+      "expected": {
+        "scores": {"1": 5, "2": 5},
+        "payouts": []
+      }
+    }
+  ]
+}
