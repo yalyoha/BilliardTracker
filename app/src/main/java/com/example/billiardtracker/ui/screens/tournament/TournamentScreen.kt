@@ -24,6 +24,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.billiardtracker.data.remote.dto.ParticipantDto
+
+/**
+ * Prefer the local user's own name over the server-side displayName when the
+ * participant is the current user. Backend uses `phone` as fallback when the
+ * user has no server-side name set — but the client already knows the friendly
+ * name from UserPrefs, so show that instead of a bare phone number.
+ */
+internal fun ParticipantDto.effectiveName(currentUserId: Long, myLocalName: String?): String {
+    return if (userId != null && userId == currentUserId && !myLocalName.isNullOrBlank()) {
+        myLocalName
+    } else {
+        displayName
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,7 +87,8 @@ fun TournamentScreen(
                     ) {
                         val marker =
                             if (t.refereeUserId != null && p.userId == t.refereeUserId) " 🎩" else ""
-                        Text("${p.displayName}$marker", modifier = Modifier.weight(1f))
+                        val name = p.effectiveName(ui.myUserId, ui.myLocalName)
+                        Text("$name$marker", modifier = Modifier.weight(1f))
                         Text("${scores[p.id] ?: 0}", fontWeight = FontWeight.Bold)
                     }
                 }
@@ -89,14 +105,18 @@ fun TournamentScreen(
                 } else {
                     RefereePanel(
                         participants = t.participants,
+                        currentUserId = ui.myUserId,
+                        myLocalName = ui.myLocalName,
                         onShot = viewModel::addShot,
                         onUndo = viewModel::undoLastShot,
                         onFinish = viewModel::finishGame,
                     )
                 }
             } else {
-                val refereeName =
-                    t.participants.firstOrNull { it.userId == t.refereeUserId }?.displayName ?: "?"
+                val refereeName = t.participants
+                    .firstOrNull { it.userId == t.refereeUserId }
+                    ?.effectiveName(ui.myUserId, ui.myLocalName)
+                    ?: "?"
                 ObserverPanel(refereeName = refereeName)
             }
         }
@@ -110,6 +130,7 @@ fun TournamentScreen(
                     tournament = tt,
                     participants = tt.participants,
                     currentUserId = ui.myUserId,
+                    myLocalName = ui.myLocalName,
                     gameId = ui.currentGame?.id,
                     onDonate = { body -> viewModel.donate(body) },
                     onDismiss = { showPayout = false },

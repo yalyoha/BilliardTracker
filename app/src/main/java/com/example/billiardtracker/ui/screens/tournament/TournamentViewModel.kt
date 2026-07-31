@@ -28,6 +28,7 @@ data class TournamentUiState(
     val currentGame: GameDto? = null,
     val games: List<GameDto> = emptyList(),
     val myUserId: Long = 0,
+    val myLocalName: String? = null,
     val lastShotIdPerGame: Map<Long, Long> = emptyMap(),
 ) {
     val isReferee: Boolean
@@ -49,7 +50,8 @@ class TournamentViewModel(
     init {
         viewModelScope.launch {
             val uid = userPrefs.getUserId() ?: 0
-            _ui.value = _ui.value.copy(myUserId = uid)
+            val name = userPrefs.getName()
+            _ui.value = _ui.value.copy(myUserId = uid, myLocalName = name)
             refresh()
             sseClient.stream(tournamentId).collect { _ ->
                 // On any event, re-fetch state. Simpler than surgical updates for MVP.

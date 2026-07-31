@@ -25,6 +25,8 @@ import com.example.billiardtracker.data.remote.dto.ParticipantDto
 @Composable
 fun RefereePanel(
     participants: List<ParticipantDto>,
+    currentUserId: Long,
+    myLocalName: String?,
     onShot: (participantId: Long, kind: String, ballNumber: Int?, pointsDelta: Int) -> Unit,
     onUndo: () -> Unit,
     onFinish: (winnerPid: Long?) -> Unit,
@@ -42,7 +44,7 @@ fun RefereePanel(
                 FilterChip(
                     selected = p.id == selectedPid,
                     onClick = { selectedPidState.value = p.id },
-                    label = { Text(p.displayName) },
+                    label = { Text(p.effectiveName(currentUserId, myLocalName)) },
                 )
             }
         }

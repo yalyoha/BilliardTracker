@@ -39,11 +39,12 @@ fun PayoutSheet(
     tournament: TournamentDto,
     participants: List<ParticipantDto>,
     currentUserId: Long,
+    myLocalName: String?,
     gameId: Long?,
     onDonate: suspend (CreateDonationBody) -> Result<DonationDto>,
     onDismiss: () -> Unit,
 ) {
-    val nameById = participants.associate { it.id to it.displayName }
+    val nameById = participants.associate { it.id to it.effectiveName(currentUserId, myLocalName) }
     val userIdByPid = participants.associate { it.id to it.userId }
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current

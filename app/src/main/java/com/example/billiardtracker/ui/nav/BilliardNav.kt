@@ -83,29 +83,43 @@ private val TABS = listOf(
 fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNavController()) {
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
-    val showBottomBar = TABS.any { it.route == currentRoute }
+
+    val gameFlowRoutes = setOf(
+        Route.NewTournamentParticipants.path,
+        Route.PickGameType.path,
+        Route.StakeSetup.path,
+        Route.Tournament.path,
+        Route.Rules.path,
+        Route.RuleDetail.path,
+        Route.AddClub.path,
+    )
 
     Scaffold(
         bottomBar = {
-            if (showBottomBar) {
-                NavigationBar {
-                    TABS.forEach { tab ->
-                        val selected = backStack?.destination?.hierarchy?.any { it.route == tab.route } == true
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = {
-                                if (!selected) {
-                                    nav.navigate(tab.route) {
-                                        popUpTo(Route.Game.path) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            icon = { Icon(tab.icon, contentDescription = tab.label) },
-                            label = { Text(tab.label) },
-                        )
+            NavigationBar {
+                TABS.forEach { tab ->
+                    val selected = when {
+                        currentRoute == tab.route -> true
+                        tab.route == Route.Game.path && currentRoute in gameFlowRoutes -> true
+                        else -> backStack?.destination?.hierarchy?.any { it.route == tab.route } == true
                     }
+                    NavigationBarItem(
+                        selected = selected,
+                        onClick = {
+                            if (!selected) {
+                                nav.navigate(tab.route) {
+                                    popUpTo(Route.Game.path) {
+                                        saveState = true
+                                        inclusive = false
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        },
+                        icon = { Icon(tab.icon, contentDescription = tab.label) },
+                        label = { Text(tab.label) },
+                    )
                 }
             }
         },

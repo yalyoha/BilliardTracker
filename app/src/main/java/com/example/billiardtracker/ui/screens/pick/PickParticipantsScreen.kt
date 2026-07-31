@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -115,11 +116,40 @@ fun PickParticipantsScreen(
                         ) {
                             Text("Добавить гостя")
                         }
-                        ui.guests.forEach { g ->
+                        if (ui.guests.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
                             Text(
-                                "• ${g.displayName}${if (g.phone != null) " (${g.phone})" else ""}",
-                                style = MaterialTheme.typography.bodySmall,
+                                "Добавленные (${ui.guests.size})",
+                                style = MaterialTheme.typography.titleSmall,
                             )
+                            ui.guests.forEachIndexed { i, g ->
+                                Card(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 4.dp),
+                                ) {
+                                    Row(
+                                        Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                g.displayName,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                            )
+                                            if (g.phone != null) {
+                                                Text(
+                                                    g.phone,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                )
+                                            }
+                                        }
+                                        TextButton(onClick = { viewModel.removeGuest(i) }) {
+                                            Text("Удалить")
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -127,14 +157,43 @@ fun PickParticipantsScreen(
 
             if (ui.permissionDenied) {
                 item {
-                    Text(
-                        "Доступ к контактам не выдан. Добавьте гостей вручную ↑",
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(vertical = 8.dp),
-                    )
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(
+                            Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                "Доступ к контактам не выдан. Добавь гостей вручную выше или разреши в настройках.",
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            TextButton(onClick = {
+                                val i = android.content.Intent(
+                                    android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    android.net.Uri.parse("package:${ctx.packageName}"),
+                                )
+                                i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                ctx.startActivity(i)
+                            }) { Text("Открыть настройки приложения") }
+                        }
+                    }
                 }
             } else if (!ui.contactsLoaded) {
                 item { Text("Загрузка контактов…") }
+            } else if (ui.contacts.isEmpty()) {
+                item {
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(
+                                "Контактов не найдено на устройстве.",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                "Добавь гостя вручную через форму выше.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
             } else {
                 itemsIndexed(ui.contacts) { i, c ->
                     val checked = i in ui.selected

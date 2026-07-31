@@ -57,6 +57,12 @@ class PickParticipantsViewModel(
         _ui.value = _ui.value.copy(guests = guests, guestNameDraft = "", guestPhoneDraft = "")
     }
 
+    fun removeGuest(index: Int) {
+        _ui.value = _ui.value.copy(
+            guests = _ui.value.guests.filterIndexed { i, _ -> i != index },
+        )
+    }
+
     fun commit(onNext: () -> Unit) {
         val fromContacts = _ui.value.selected.map { i ->
             val c = _ui.value.contacts[i]
