@@ -18,6 +18,8 @@ import com.example.billiardtracker.ui.screens.rules.RuleDetailScreen
 import com.example.billiardtracker.ui.screens.rules.RuleDetailViewModel
 import com.example.billiardtracker.ui.screens.rules.RulesListScreen
 import com.example.billiardtracker.ui.screens.rules.RulesListViewModel
+import com.example.billiardtracker.ui.screens.settings.SettingsScreen
+import com.example.billiardtracker.ui.screens.settings.SettingsViewModel
 import com.example.billiardtracker.ui.screens.tournament.TournamentScreen
 import com.example.billiardtracker.ui.screens.tournament.TournamentViewModel
 
@@ -39,6 +41,7 @@ sealed class Route(val path: String) {
             fun build(slug: String) = "rules/$slug"
         }
     }
+    object Settings : Route("settings")
 }
 
 @Composable
@@ -51,6 +54,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                 onNewTournament = { nav.navigate(Route.NewTournament.path) },
                 onOpenTournament = { id -> nav.navigate(Route.Tournament.build(id)) },
                 onOpenRules = { nav.navigate(Route.Rules.path) },
+                onOpenSettings = { nav.navigate(Route.Settings.path) },
             )
         }
         composable(Route.NewTournament.path) {
@@ -105,6 +109,15 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
             val slug = backStackEntry.arguments?.getString("slug") ?: return@composable
             val vm = RuleDetailViewModel(slug, container.ruleRepository)
             RuleDetailScreen(viewModel = vm, onBack = { nav.popBackStack() })
+        }
+        composable(Route.Settings.path) {
+            val vm = SettingsViewModel(
+                updatePrefs = container.updatePrefs,
+                updater = container.updaterRepository,
+                authRepo = container.authRepository,
+                currentVersionCode = com.example.billiardtracker.BuildConfig.VERSION_CODE,
+            )
+            SettingsScreen(vm, onBack = { nav.popBackStack() })
         }
     }
 }

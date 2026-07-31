@@ -14,6 +14,7 @@ import com.example.billiardtracker.data.remote.dto.TournamentDto
 import com.example.billiardtracker.data.remote.dto.TournamentsListDto
 import com.example.billiardtracker.data.remote.dto.VerifyBody
 import com.example.billiardtracker.data.remote.dto.VerifyResponse
+import com.example.billiardtracker.data.remote.dto.VersionDto
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -68,4 +69,7 @@ interface ApiService {
 
     @GET("api/rules/{slug}")
     suspend fun getRuleMarkdown(@Path("slug") slug: String): Response<ResponseBody>
+
+    @GET("version.json")
+    suspend fun getVersionJson(): Response<VersionDto>
 }

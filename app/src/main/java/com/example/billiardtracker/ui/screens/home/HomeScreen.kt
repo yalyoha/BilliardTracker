@@ -38,6 +38,7 @@ fun HomeScreen(
     onNewTournament: () -> Unit,
     onOpenTournament: (Long) -> Unit,
     onOpenRules: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val list by viewModel.tournaments.collectAsStateWithLifecycle()
 
@@ -47,6 +48,7 @@ fun HomeScreen(
                 title = { Text("Мои турниры") },
                 actions = {
                     TextButton(onClick = onOpenRules) { Text("Правила") }
+                    TextButton(onClick = onOpenSettings) { Text("⚙") }
                 },
             )
         },

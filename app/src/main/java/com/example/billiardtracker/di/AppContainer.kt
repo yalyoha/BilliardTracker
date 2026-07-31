@@ -3,6 +3,7 @@ package com.example.billiardtracker.di
 import android.content.Context
 import androidx.room.Room
 import com.example.billiardtracker.data.local.AppDatabase
+import com.example.billiardtracker.data.prefs.UpdatePrefs
 import com.example.billiardtracker.data.prefs.UserPrefs
 import com.example.billiardtracker.data.remote.ApiService
 import com.example.billiardtracker.data.remote.NetworkModule
@@ -11,6 +12,7 @@ import com.example.billiardtracker.data.repo.AuthRepository
 import com.example.billiardtracker.data.repo.GameRepository
 import com.example.billiardtracker.data.repo.RuleRepository
 import com.example.billiardtracker.data.repo.TournamentRepository
+import com.example.billiardtracker.data.repo.UpdaterRepository
 
 class AppContainer(context: Context) {
     val db: AppDatabase = Room.databaseBuilder(
@@ -38,6 +40,8 @@ class AppContainer(context: Context) {
     val tournamentRepository = TournamentRepository(apiService, tournamentDao, participantDao)
     val gameRepository = GameRepository(apiService)
     val ruleRepository = RuleRepository(apiService, ruleDao)
+    val updaterRepository = UpdaterRepository(apiService)
+    val updatePrefs: UpdatePrefs = UpdatePrefs.create(context.applicationContext)
     val sseClient = SseClient(
         baseUrl = "https://billiardtracker.alekseylosev.ru/",
         prefs = userPrefs,
