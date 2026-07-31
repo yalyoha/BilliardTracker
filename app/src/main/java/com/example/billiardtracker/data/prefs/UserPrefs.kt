@@ -17,15 +17,25 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
     val tokenFlow: Flow<String?> = dataStore.data.map { it[TOKEN] }
     val userIdFlow: Flow<Long?> = dataStore.data.map { it[USER_ID] }
     val phoneFlow: Flow<String?> = dataStore.data.map { it[PHONE] }
+    val nameFlow: Flow<String?> = dataStore.data.map { it[NAME_LOCAL] }
 
     suspend fun getToken(): String? = tokenFlow.first()
     suspend fun getUserId(): Long? = userIdFlow.first()
+    suspend fun getPhone(): String? = phoneFlow.first()
+    suspend fun getName(): String? = nameFlow.first()
 
     suspend fun setAuth(token: String, userId: Long, phone: String) {
         dataStore.edit {
             it[TOKEN] = token
             it[USER_ID] = userId
             it[PHONE] = phone
+        }
+    }
+
+    suspend fun setLocalProfile(phone: String?, name: String?) {
+        dataStore.edit {
+            if (phone != null) it[PHONE] = phone else it.remove(PHONE)
+            if (name != null) it[NAME_LOCAL] = name else it.remove(NAME_LOCAL)
         }
     }
 
@@ -37,6 +47,7 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
         private val TOKEN = stringPreferencesKey("token")
         private val USER_ID = longPreferencesKey("user_id")
         private val PHONE = stringPreferencesKey("phone")
+        private val NAME_LOCAL = stringPreferencesKey("name_local")
 
         fun create(context: Context): UserPrefs = UserPrefs(context.userDataStore)
     }
