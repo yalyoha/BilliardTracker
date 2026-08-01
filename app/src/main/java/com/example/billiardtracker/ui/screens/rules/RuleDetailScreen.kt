@@ -14,13 +14,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.billiardtracker.ui.components.BilliardTopBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,7 +32,7 @@ fun RuleDetailScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            BilliardTopBar(
                 title = { Text(ui.displayName) },
                 navigationIcon = { TextButton(onClick = onBack) { Text("Назад") } },
             )

@@ -1,24 +1,38 @@
 package com.example.billiardtracker.ui.screens.tournament
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.billiardtracker.data.remote.dto.ParticipantDto
+
+private val BallWhite = Color(0xFFF5EFD9)   // BallCream — незабитый
+private val BallGrey = Color(0xFF6B6B6B)    // забитый — приглушённый серый
+private val BallText = Color(0xFF1A1A1A)    // цифра — тёмная
 
 @Composable
 fun RefereePanel(
@@ -32,42 +46,61 @@ fun RefereePanel(
 ) {
     val selectedPidState = remember { mutableStateOf(participants.firstOrNull()?.id ?: 0L) }
     val selectedPid = selectedPidState.value
+    val goldBorder = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
 
     Column(
         Modifier.fillMaxWidth().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Активный игрок", style = MaterialTheme.typography.titleSmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Участники турнира", style = MaterialTheme.typography.titleSmall)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             participants.forEach { p ->
-                FilterChip(
-                    selected = p.id == selectedPid,
-                    onClick = { selectedPidState.value = p.id },
-                    label = { Text(p.effectiveName(currentUserId, myLocalName)) },
-                )
+                val isActive = p.id == selectedPid
+                if (isActive) {
+                    Button(
+                        onClick = { selectedPidState.value = p.id },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { CenterText(p.effectiveName(currentUserId, myLocalName)) }
+                } else {
+                    OutlinedButton(
+                        onClick = { selectedPidState.value = p.id },
+                        border = goldBorder,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.primary,
+                        ),
+                    ) { CenterText(p.effectiveName(currentUserId, myLocalName)) }
+                }
             }
         }
 
         Divider()
         Text("Забитый шар", style = MaterialTheme.typography.titleSmall)
-        // 3 ряда по 5 кнопок — обычные Rows чтобы работал nested-scroll
-        // внутри verticalScroll в TournamentScreen. LazyVerticalGrid тут ломает layout.
         for (row in 0..2) {
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 for (col in 0..4) {
                     val ball = row * 5 + col + 1
                     val potted = ball in pottedBalls
-                    OutlinedButton(
-                        onClick = { onShot(selectedPid, "ball", ball, 1) },
-                        enabled = !potted,
-                        modifier = Modifier.weight(1f),
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(1f)
+                            .clip(CircleShape)
+                            .background(if (potted) BallGrey else BallWhite)
+                            .clickable(enabled = !potted) {
+                                onShot(selectedPid, "ball", ball, 1)
+                            },
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             "$ball",
-                            textDecoration = if (potted) TextDecoration.LineThrough else null,
+                            color = BallText,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 20.sp,
+                            textAlign = TextAlign.Center,
                         )
                     }
                 }
@@ -78,26 +111,42 @@ fun RefereePanel(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
                 onClick = { onShot(selectedPid, "svoiak", null, 1) },
+                border = goldBorder,
                 modifier = Modifier.weight(1f),
-            ) { Text("Свояк") }
+            ) { CenterText("Свояк") }
             OutlinedButton(
                 onClick = { onShot(selectedPid, "foul", null, -1) },
+                border = goldBorder,
                 modifier = Modifier.weight(1f),
-            ) { Text("Штраф") }
+            ) { CenterText("Штраф") }
             OutlinedButton(
                 onClick = { onShot(selectedPid, "ball_out", null, -1) },
+                border = goldBorder,
                 modifier = Modifier.weight(1f),
-            ) { Text("За борт") }
+            ) { CenterText("За борт") }
         }
 
         Divider()
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onUndo, modifier = Modifier.weight(1f)) {
-                Text("Отменить последний")
-            }
-            Button(onClick = { onFinish(selectedPid) }, modifier = Modifier.weight(1f)) {
-                Text("Партия окончена")
-            }
+            OutlinedButton(
+                onClick = onUndo,
+                border = goldBorder,
+                modifier = Modifier.weight(1f),
+            ) { CenterText("Отменить последний") }
+            Button(
+                onClick = { onFinish(null) },
+                modifier = Modifier.weight(1f),
+            ) { CenterText("Партия окончена") }
         }
     }
+}
+
+/** Однострочный/многострочный текст, отцентрированный в кнопке. */
+@Composable
+private fun CenterText(text: String) {
+    Text(
+        text,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }

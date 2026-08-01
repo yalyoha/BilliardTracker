@@ -107,16 +107,37 @@ class TournamentViewModel(
         }
     }
 
-    fun finishGame(winnerPid: Long?) {
-        val gid = _ui.value.currentGame?.id ?: return
+    fun finishGame(winnerPid: Long? = null) {
+        val game = _ui.value.currentGame ?: return
+        // Auto-pick winner as highest scorer if caller didn't specify one.
+        // Ties break to the participant that appears first in the tournament
+        // — deterministic, and matches the order users see in the scoreboard.
+        val resolvedWinner = winnerPid ?: run {
+            val partIdOrder = _ui.value.tournament?.participants
+                ?.mapIndexed { i, p -> p.id to i }?.toMap() ?: emptyMap()
+            game.scores
+                .maxWithOrNull(
+                    compareBy<com.example.billiardtracker.data.remote.dto.ScoreDto> { it.points }
+                        .thenByDescending { partIdOrder[it.participantId] ?: Int.MAX_VALUE },
+                )?.participantId
+        }
         viewModelScope.launch {
-            gameRepo.finishGame(tournamentId, gid, winnerPid).onSuccess { refresh() }
+            gameRepo.finishGame(tournamentId, game.id, resolvedWinner).onSuccess { refresh() }
         }
     }
 
     fun claimReferee() {
         viewModelScope.launch {
             gameRepo.claimReferee(tournamentId).onSuccess { refresh() }
+        }
+    }
+
+    fun closeTournament(onDone: () -> Unit) {
+        viewModelScope.launch {
+            tournamentRepo.finish(tournamentId).onSuccess {
+                refresh()
+                onDone()
+            }
         }
     }
 
@@ -139,6 +160,34 @@ class TournamentViewModel(
             val t = _ui.value.tournament ?: return null
             val g = _ui.value.currentGame ?: return null
             val shots = g.scores.flatMap { s ->
+                List(s.points.coerceAtLeast(0)) {
+                    PayoutInputShot(participantId = s.participantId, kind = "ball", pointsDelta = 1)
+                }
+            }
+            return PayoutCalculator.compute(
+                tournament = PayoutInputTournament(id = t.id, moneyPerBallKop = t.moneyPerBallKop),
+                participants = t.participants.map {
+                    PayoutInputParticipant(
+                        id = it.id,
+                        handicapPoints = it.handicapPoints,
+                        perBallOverrideKop = it.perBallOverrideKop,
+                    )
+                },
+                shots = shots,
+            )
+        }
+
+    /**
+     * Tournament-wide payout: aggregates scores across every finished game
+     * (not just the last one). This is what the PayoutScreen shows —
+     * per-game payouts wouldn't reflect who actually owes whom by the end.
+     */
+    val tournamentPayout: PayoutResult?
+        get() {
+            val t = _ui.value.tournament ?: return null
+            val games = _ui.value.games
+            if (games.isEmpty()) return null
+            val shots = games.flatMap { it.scores }.flatMap { s ->
                 List(s.points.coerceAtLeast(0)) {
                     PayoutInputShot(participantId = s.participantId, kind = "ball", pointsDelta = 1)
                 }

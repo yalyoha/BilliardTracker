@@ -2,6 +2,10 @@ package com.example.billiardtracker.di
 
 import android.content.Context
 import androidx.room.Room
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.sync.Mutex
 import com.example.billiardtracker.data.local.AppDatabase
 import com.example.billiardtracker.data.prefs.UpdatePrefs
 import com.example.billiardtracker.data.prefs.UserPrefs
@@ -56,4 +60,22 @@ class AppContainer(context: Context) {
     )
 
     val newTournamentState = com.example.billiardtracker.ui.nav.NewTournamentState()
+    val teamState = com.example.billiardtracker.ui.nav.TeamState()
+
+    /**
+     * Application-lifetime scope for multi-step flows that must survive UI
+     * teardown (e.g. onboarding register+createToken: register puts JWT into
+     * prefs → composition re-renders → OnboardingScreen leaves → its
+     * rememberCoroutineScope cancels the in-flight createToken. Using this
+     * scope decouples completion from composition.)
+     */
+    val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /**
+     * Guards the "auto-create default path master when list is empty" branch
+     * of SettingsViewModel.refreshTokens. Two overlapping VM inits (bottom-nav
+     * recomposition) each seeing an empty list would race and each POST a
+     * new token — user ended up with two paths after deleting all.
+     */
+    val tokenSelfHealMutex: Mutex = Mutex()
 }

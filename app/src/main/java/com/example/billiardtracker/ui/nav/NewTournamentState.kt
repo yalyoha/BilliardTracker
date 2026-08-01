@@ -13,11 +13,13 @@ class NewTournamentState {
     val title = MutableStateFlow<String?>(null)
     val gameType = MutableStateFlow<String?>(null)
     val moneyPerBallKop = MutableStateFlow<Long?>(null)
+    val winsRequired = MutableStateFlow<Int?>(3)
 
     fun reset() {
         participants.value = emptyList()
         title.value = null
         gameType.value = null
         moneyPerBallKop.value = null
+        winsRequired.value = 3
     }
 }

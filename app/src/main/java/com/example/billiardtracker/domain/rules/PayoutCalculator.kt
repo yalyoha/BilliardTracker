@@ -45,6 +45,9 @@ object PayoutCalculator {
             { it.perBallOverrideKop ?: tournament.moneyPerBallKop }
         val byId = participants.associateBy { it.id }
 
+        // Compute per-player NET balance by summing pairwise differences.
+        // Positive net = owed money, negative = owes money.
+        val net = mutableMapOf<Long, Long>()
         val ids = participants.map { it.id }.sorted()
         for (i in ids.indices) {
             for (j in i + 1 until ids.size) {
@@ -52,12 +55,41 @@ object PayoutCalculator {
                 val diff = (scores[a] ?: 0) - (scores[b] ?: 0)
                 if (diff == 0) continue
                 val rate = minOf(rateOf(byId[a]!!), rateOf(byId[b]!!))
+                val amount = kotlin.math.abs(diff.toLong()) * rate
                 if (diff > 0) {
-                    payouts += PayoutEntry(fromParticipantId = b, toParticipantId = a, amountKop = (diff.toLong()) * rate)
+                    net[a] = (net[a] ?: 0L) + amount
+                    net[b] = (net[b] ?: 0L) - amount
                 } else {
-                    payouts += PayoutEntry(fromParticipantId = a, toParticipantId = b, amountKop = (-diff.toLong()) * rate)
+                    net[b] = (net[b] ?: 0L) + amount
+                    net[a] = (net[a] ?: 0L) - amount
                 }
             }
+        }
+
+        // Debt simplification: greedy match largest debtor and creditor,
+        // repeatedly transferring min(|debt|, credit). Collapses chains like
+        // A→B, B→C into a single A→C — what the user actually cares about
+        // when settling up.
+        val creditors = net.filter { it.value > 0 }
+            .toList().sortedByDescending { it.second }.toMutableList()
+        val debtors = net.filter { it.value < 0 }
+            .toList().sortedBy { it.second }.toMutableList()
+
+        while (creditors.isNotEmpty() && debtors.isNotEmpty()) {
+            val (creditorId, creditorAmt) = creditors.first()
+            val (debtorId, debtorAmt) = debtors.first()
+            val transfer = minOf(creditorAmt, -debtorAmt)
+            payouts += PayoutEntry(
+                fromParticipantId = debtorId,
+                toParticipantId = creditorId,
+                amountKop = transfer,
+            )
+            val newCredit = creditorAmt - transfer
+            val newDebt = debtorAmt + transfer
+            creditors.removeAt(0)
+            debtors.removeAt(0)
+            if (newCredit > 0) creditors.add(0, creditorId to newCredit)
+            if (newDebt < 0) debtors.add(0, debtorId to newDebt)
         }
         return PayoutResult(scores, payouts)
     }

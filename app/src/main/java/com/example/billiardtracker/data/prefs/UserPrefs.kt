@@ -18,11 +18,28 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
     val userIdFlow: Flow<Long?> = dataStore.data.map { it[USER_ID] }
     val phoneFlow: Flow<String?> = dataStore.data.map { it[PHONE] }
     val nameFlow: Flow<String?> = dataStore.data.map { it[NAME_LOCAL] }
+    val activeTokenIdFlow: Flow<Long?> = dataStore.data.map { it[ACTIVE_TOKEN_ID] }
+    val pendingSharedTokenFlow: Flow<String?> = dataStore.data.map { it[PENDING_SHARED_TOKEN] }
 
     suspend fun getToken(): String? = tokenFlow.first()
     suspend fun getUserId(): Long? = userIdFlow.first()
     suspend fun getPhone(): String? = phoneFlow.first()
     suspend fun getName(): String? = nameFlow.first()
+    suspend fun getActiveTokenId(): Long? = activeTokenIdFlow.first()
+    suspend fun getPendingSharedToken(): String? = pendingSharedTokenFlow.first()
+
+    suspend fun setPendingSharedToken(token: String?) {
+        dataStore.edit {
+            if (token == null) it.remove(PENDING_SHARED_TOKEN)
+            else it[PENDING_SHARED_TOKEN] = token
+        }
+    }
+
+    suspend fun setActiveTokenId(id: Long?) {
+        dataStore.edit {
+            if (id == null) it.remove(ACTIVE_TOKEN_ID) else it[ACTIVE_TOKEN_ID] = id
+        }
+    }
 
     suspend fun setAuth(token: String, userId: Long, phone: String) {
         dataStore.edit {
@@ -48,6 +65,8 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
         private val USER_ID = longPreferencesKey("user_id")
         private val PHONE = stringPreferencesKey("phone")
         private val NAME_LOCAL = stringPreferencesKey("name_local")
+        private val ACTIVE_TOKEN_ID = longPreferencesKey("active_token_id")
+        private val PENDING_SHARED_TOKEN = stringPreferencesKey("pending_shared_token")
 
         fun create(context: Context): UserPrefs = UserPrefs(context.userDataStore)
     }

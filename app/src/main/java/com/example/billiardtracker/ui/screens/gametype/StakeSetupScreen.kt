@@ -11,6 +11,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.billiardtracker.ui.components.BilliardTopBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,7 +25,7 @@ fun StakeSetupScreen(
     LaunchedEffect(ui.createdTournamentId) { ui.createdTournamentId?.let(onCreated) }
 
     Scaffold(
-        topBar = { TopAppBar(
+        topBar = { BilliardTopBar(
             title = { Text("Настройка турнира") },
             navigationIcon = { TextButton(onClick = onBack) { Text("Назад") } },
             actions = {
@@ -42,20 +43,25 @@ fun StakeSetupScreen(
 
             OutlinedTextField(
                 value = ui.title, onValueChange = viewModel::setTitle,
-                label = { Text("Название турнира (необязательно)") },
+                label = { Text("Название") },
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
             )
 
             if (ui.moneyPlayable) {
                 OutlinedTextField(
                     value = ui.stakeRub, onValueChange = viewModel::setStake,
-                    label = { Text("Ставка ₽ за шар (пусто = не на деньги)") },
+                    label = { Text("Ставка ₽ за шар") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
             } else {
                 Text("Эта дисциплина не подразумевает игру на деньги", style = MaterialTheme.typography.bodySmall)
             }
+
+            WinsRequiredDropdown(
+                value = ui.winsRequired,
+                onChange = viewModel::setWinsRequired,
+            )
 
             Divider()
             Text("Участники (гандикап и индивидуальная ставка)", style = MaterialTheme.typography.titleSmall)
@@ -81,7 +87,7 @@ fun StakeSetupScreen(
                             OutlinedTextField(
                                 value = p.overrideRub,
                                 onValueChange = { s -> viewModel.setOverride(i, s) },
-                                label = { Text("Индивид. ставка ₽/шар (пусто = как у всех)") },
+                                label = { Text("Ставка ₽/шар") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 singleLine = true, modifier = Modifier.fillMaxWidth(),
                             )
@@ -92,6 +98,42 @@ fun StakeSetupScreen(
 
             if (ui.error != null) {
                 Text(ui.error!!, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WinsRequiredDropdown(value: Int, onChange: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        OutlinedTextField(
+            value = "$value",
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("До скольких побед") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            (1..10).forEach { n ->
+                DropdownMenuItem(
+                    text = { Text("$n") },
+                    onClick = {
+                        onChange(n)
+                        expanded = false
+                    },
+                )
             }
         }
     }

@@ -13,14 +13,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -29,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.billiardtracker.data.local.entity.TournamentEntity
+import com.example.billiardtracker.ui.components.BilliardTopBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,7 +36,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onNewTournament: () -> Unit,
     onOpenTournament: (Long) -> Unit,
-    onOpenRules: () -> Unit,
+    onOpenPayout: (Long) -> Unit,
     onOpenSettings: () -> Unit,
     onAddClub: () -> Unit,
 ) {
@@ -44,7 +44,7 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            BilliardTopBar(
                 title = { Text("Мои турниры") },
             )
         },
@@ -53,6 +53,8 @@ fun HomeScreen(
                 onClick = onNewTournament,
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                 text = { Text("Новый турнир") },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
             )
         },
     ) { padding ->
@@ -81,7 +83,11 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(list, key = { it.id }) { t ->
-                    TournamentCard(t, onClick = { onOpenTournament(t.id) })
+                    TournamentCard(
+                        t,
+                        onClick = { onOpenTournament(t.id) },
+                        onOpenPayout = { onOpenPayout(t.id) },
+                    )
                 }
             }
         }
@@ -90,20 +96,37 @@ fun HomeScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TournamentCard(t: TournamentEntity, onClick: () -> Unit) {
-    ElevatedCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+private fun TournamentCard(
+    t: TournamentEntity,
+    onClick: () -> Unit,
+    onOpenPayout: () -> Unit,
+) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text(
-                t.title ?: "Без названия",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(displayGameType(t.gameType), style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.height(4.dp))
-            AssistChip(
-                onClick = {},
-                label = { Text(if (t.status == "active") "Идёт" else "Закончен") },
-            )
+            androidx.compose.foundation.layout.Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = androidx.compose.ui.Alignment.Top,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        t.title ?: "Без названия",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(displayGameType(t.gameType), style = MaterialTheme.typography.bodySmall)
+                }
+                AssistChip(
+                    onClick = {},
+                    label = { Text(if (t.status == "active") "Идёт" else "Закончен") },
+                )
+            }
+            if (t.status != "active") {
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onOpenPayout,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Итоги") }
+            }
         }
     }
 }

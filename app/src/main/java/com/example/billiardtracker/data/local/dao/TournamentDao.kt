@@ -23,4 +23,7 @@ interface TournamentDao {
 
     @Query("DELETE FROM tournaments WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM tournaments")
+    suspend fun deleteAll()
 }

@@ -22,11 +22,27 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.BilliardTracker">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!--
+              Deep link into the app when someone shares a master-token URL.
+              https://billiardtracker.alekseylosev.ru/live/<48-hex-token>
+              autoVerify=true enables Android App Links: the OS fetches
+              /.well-known/assetlinks.json to confirm the site delegates
+              handling to this app; if verified, links open without a chooser.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https"
+                      android:host="billiardtracker.alekseylosev.ru"
+                      android:pathPrefix="/live/" />
             </intent-filter>
         </activity>
 

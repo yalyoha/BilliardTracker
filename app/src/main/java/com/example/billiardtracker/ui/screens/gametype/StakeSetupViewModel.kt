@@ -2,6 +2,7 @@ package com.example.billiardtracker.ui.screens.gametype
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.billiardtracker.data.prefs.UserPrefs
 import com.example.billiardtracker.data.remote.dto.CreateParticipantBody
 import com.example.billiardtracker.data.remote.dto.CreateTournamentBody
 import com.example.billiardtracker.data.repo.TournamentRepository
@@ -19,6 +20,7 @@ data class StakeUiState(
     val moneyPlayable: Boolean = false,
     val title: String = "",
     val stakeRub: String = "",
+    val winsRequired: Int = 3,
     val perParticipant: List<ParticipantStakeUi> = emptyList(),
     val loading: Boolean = false,
     val error: String? = null,
@@ -35,6 +37,7 @@ data class ParticipantStakeUi(
 class StakeSetupViewModel(
     private val newTournamentState: NewTournamentState,
     private val repo: TournamentRepository,
+    private val userPrefs: UserPrefs,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(StakeUiState())
@@ -55,6 +58,7 @@ class StakeSetupViewModel(
             gameTypeSlug = slug,
             moneyPlayable = profile.moneyPlayable,
             title = newTournamentState.title.value ?: "",
+            winsRequired = newTournamentState.winsRequired.value ?: 3,
             perParticipant = parts.map {
                 ParticipantStakeUi(displayName = it.displayName, phone = it.phone)
             },
@@ -63,6 +67,7 @@ class StakeSetupViewModel(
 
     fun setTitle(v: String) { _ui.value = _ui.value.copy(title = v) }
     fun setStake(v: String) { _ui.value = _ui.value.copy(stakeRub = v.filter { it.isDigit() }) }
+    fun setWinsRequired(v: Int) { _ui.value = _ui.value.copy(winsRequired = v.coerceIn(1, 10)) }
     fun setHandicap(idx: Int, v: Int) {
         val list = _ui.value.perParticipant.toMutableList()
         list[idx] = list[idx].copy(handicapPoints = v)
@@ -81,21 +86,24 @@ class StakeSetupViewModel(
             return
         }
         val moneyKop = _ui.value.stakeRub.toLongOrNull()?.times(100)
-        val body = CreateTournamentBody(
-            title = _ui.value.title.takeIf { it.isNotBlank() },
-            gameType = slug,
-            moneyPerBallKop = moneyKop,
-            participants = _ui.value.perParticipant.map { p ->
-                CreateParticipantBody(
-                    phone = p.phone,
-                    displayName = p.displayName,
-                    handicapPoints = p.handicapPoints,
-                    perBallOverrideKop = p.overrideRub.toLongOrNull()?.times(100),
-                )
-            },
-        )
         _ui.value = _ui.value.copy(loading = true)
         viewModelScope.launch {
+            val activeTokenId = userPrefs.getActiveTokenId()
+            val body = CreateTournamentBody(
+                title = _ui.value.title.takeIf { it.isNotBlank() },
+                gameType = slug,
+                moneyPerBallKop = moneyKop,
+                winsRequired = _ui.value.winsRequired,
+                masterTokenId = activeTokenId,
+                participants = _ui.value.perParticipant.map { p ->
+                    CreateParticipantBody(
+                        phone = p.phone,
+                        displayName = p.displayName,
+                        handicapPoints = p.handicapPoints,
+                        perBallOverrideKop = p.overrideRub.toLongOrNull()?.times(100),
+                    )
+                },
+            )
             repo.create(body).fold(
                 onSuccess = { dto ->
                     newTournamentState.reset()

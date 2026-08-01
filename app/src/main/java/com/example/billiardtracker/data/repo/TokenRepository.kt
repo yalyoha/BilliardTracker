@@ -2,14 +2,16 @@ package com.example.billiardtracker.data.repo
 
 import com.example.billiardtracker.data.remote.ApiService
 import com.example.billiardtracker.data.remote.dto.CreateTokenBody
+import com.example.billiardtracker.data.remote.dto.SubscribeTokenBody
 import com.example.billiardtracker.data.remote.dto.TokenDto
+import com.example.billiardtracker.data.remote.dto.UpdateTokenBody
 
 /**
  * Master-tokens: opaque share-links so a group of friends can watch your
  * tournaments through the public web view without any auth.
  *
  * All endpoints require bearer JWT — the calling UI must ensure the user is
- * cloud-logged-in (see [com.example.billiardtracker.ui.components.CloudLoginDialog]).
+ * cloud-logged-in (guaranteed by [com.example.billiardtracker.ui.screens.onboarding.OnboardingScreen]).
  */
 class TokenRepository(private val api: ApiService) {
 
@@ -23,6 +25,30 @@ class TokenRepository(private val api: ApiService) {
 
     suspend fun create(name: String?): Result<TokenDto> = try {
         val res = api.createToken(CreateTokenBody(name = name?.takeIf { it.isNotBlank() }))
+        if (res.isSuccessful) Result.success(res.body()!!)
+        else Result.failure(IllegalStateException("HTTP ${res.code()}"))
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    suspend fun ensureDefault(): Result<TokenDto> = try {
+        val res = api.ensureDefaultToken()
+        if (res.isSuccessful) Result.success(res.body()!!)
+        else Result.failure(IllegalStateException("HTTP ${res.code()}"))
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    suspend fun subscribe(token: String): Result<TokenDto> = try {
+        val res = api.subscribeToken(SubscribeTokenBody(token))
+        if (res.isSuccessful) Result.success(res.body()!!)
+        else Result.failure(IllegalStateException("HTTP ${res.code()}"))
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    suspend fun rename(id: Long, name: String?): Result<TokenDto> = try {
+        val res = api.updateToken(id, UpdateTokenBody(name = name?.takeIf { it.isNotBlank() }))
         if (res.isSuccessful) Result.success(res.body()!!)
         else Result.failure(IllegalStateException("HTTP ${res.code()}"))
     } catch (e: Exception) {

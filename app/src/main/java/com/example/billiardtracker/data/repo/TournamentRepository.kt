@@ -16,8 +16,8 @@ class TournamentRepository(
 ) {
     fun observeAll(): Flow<List<TournamentEntity>> = tournamentDao.observeAll()
 
-    suspend fun refreshMine(): Result<Unit> = try {
-        val res = api.getMyTournaments()
+    suspend fun refreshMine(tokenId: Long? = null): Result<Unit> = try {
+        val res = api.getMyTournaments(tokenId)
         if (!res.isSuccessful) {
             Result.failure(IllegalStateException("HTTP ${res.code()}"))
         } else {
@@ -37,6 +37,10 @@ class TournamentRepository(
                     lastSyncedAt = now,
                 )
             }
+            // Full replace: switching the active token would otherwise leave
+            // stale tournaments from the previous token visible until they
+            // scrolled off the DAO's ordering.
+            tournamentDao.deleteAll()
             tournamentDao.upsertAll(entities)
             Result.success(Unit)
         }
@@ -80,6 +84,19 @@ class TournamentRepository(
                 },
             )
             Result.success(dto)
+        }
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    suspend fun finish(id: Long): Result<TournamentDto> = try {
+        val res = api.finishTournament(id)
+        if (res.isSuccessful) {
+            val dto = res.body()!!
+            fetchDetail(id) // refresh local cache with finished status
+            Result.success(dto)
+        } else {
+            Result.failure(IllegalStateException("HTTP ${res.code()}"))
         }
     } catch (e: Exception) {
         Result.failure(e)

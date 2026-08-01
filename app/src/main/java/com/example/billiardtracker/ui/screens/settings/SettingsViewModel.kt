@@ -49,13 +49,27 @@ class SettingsViewModel(
     val autoCheck: StateFlow<Boolean> = updatePrefs.autoCheckFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    /** true → local prefs have no JWT → need to show CloudLoginDialog before token ops. */
+    /** true → local prefs have no JWT — onboarding gate handles this at app start. */
     val needsCloudLogin: StateFlow<Boolean> = userPrefs.tokenFlow
         .map { it.isNullOrEmpty() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    val activeTokenId: StateFlow<Long?> = userPrefs.activeTokenIdFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun setActiveToken(id: Long) {
+        viewModelScope.launch { userPrefs.setActiveTokenId(id) }
+    }
+
     private val _tokens = MutableStateFlow(TokensUiState())
     val tokens: StateFlow<TokensUiState> = _tokens.asStateFlow()
+
+    init {
+        // Refresh runs on every VM creation. Reliable across bottom-nav tab
+        // switches (saveState/restoreState in NavHost was preventing the
+        // previous LaunchedEffect(Unit) approach from re-firing).
+        refreshTokens()
+    }
 
     fun setAutoCheck(v: Boolean) { viewModelScope.launch { updatePrefs.setAutoCheck(v) } }
 
@@ -86,7 +100,29 @@ class SettingsViewModel(
         viewModelScope.launch {
             tokenRepo.list().fold(
                 onSuccess = { list ->
-                    _tokens.value = TokensUiState(loading = false, tokens = list)
+                    if (list.isEmpty()) {
+                        // Идемпотентная ручка на сервере — SELECT+INSERT в одной
+                        // транзакции. Даже если два VM запустят это одновременно,
+                        // второй увидит уже вставленный первым и вернёт его.
+                        tokenRepo.ensureDefault().fold(
+                            onSuccess = { token ->
+                                _tokens.value = TokensUiState(loading = false, tokens = listOf(token))
+                                userPrefs.setActiveTokenId(token.id)
+                            },
+                            onFailure = { e ->
+                                _tokens.value = _tokens.value.copy(
+                                    loading = false,
+                                    error = e.message ?: "Не удалось создать путь",
+                                )
+                            },
+                        )
+                    } else {
+                        _tokens.value = TokensUiState(loading = false, tokens = list)
+                        val stored = userPrefs.getActiveTokenId()
+                        if (stored == null || list.none { it.id == stored }) {
+                            userPrefs.setActiveTokenId(list.first().id)
+                        }
+                    }
                 },
                 onFailure = { e ->
                     _tokens.value = _tokens.value.copy(
@@ -102,16 +138,53 @@ class SettingsViewModel(
         _tokens.value = _tokens.value.copy(loading = true, error = null)
         viewModelScope.launch {
             tokenRepo.create(name).fold(
-                onSuccess = { created ->
-                    _tokens.value = _tokens.value.copy(
-                        loading = false,
-                        tokens = _tokens.value.tokens + created,
-                    )
+                onSuccess = {
+                    // Re-fetch from server rather than appending locally: keeps
+                    // ordering + tournamentCount consistent, and avoids the
+                    // list-desync users hit when local optimistic state raced
+                    // with a background refresh.
+                    reloadTokens()
                 },
                 onFailure = { e ->
                     _tokens.value = _tokens.value.copy(
                         loading = false,
                         error = e.message ?: "Не удалось создать путь",
+                    )
+                },
+            )
+        }
+    }
+
+    private suspend fun reloadTokens() {
+        tokenRepo.list().fold(
+            onSuccess = { list ->
+                _tokens.value = TokensUiState(loading = false, tokens = list)
+                val stored = userPrefs.getActiveTokenId()
+                if ((stored == null || list.none { it.id == stored }) && list.isNotEmpty()) {
+                    userPrefs.setActiveTokenId(list.first().id)
+                }
+            },
+            onFailure = { e ->
+                _tokens.value = _tokens.value.copy(
+                    loading = false,
+                    error = e.message ?: "Не удалось загрузить пути",
+                )
+            },
+        )
+    }
+
+    fun renameToken(id: Long, name: String?) {
+        viewModelScope.launch {
+            tokenRepo.rename(id, name).fold(
+                onSuccess = { updated ->
+                    val list = _tokens.value.tokens.map {
+                        if (it.id == id) it.copy(name = updated.name) else it
+                    }
+                    _tokens.value = _tokens.value.copy(tokens = list, error = null)
+                },
+                onFailure = { e ->
+                    _tokens.value = _tokens.value.copy(
+                        error = e.message ?: "Не удалось переименовать",
                     )
                 },
             )

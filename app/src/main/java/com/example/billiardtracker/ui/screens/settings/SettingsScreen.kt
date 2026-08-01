@@ -37,12 +37,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.rememberCoroutineScope
 import com.example.billiardtracker.data.remote.dto.TokenDto
-import com.example.billiardtracker.data.repo.AuthRepository
 import com.example.billiardtracker.ui.components.BilliardTopBar
-import com.example.billiardtracker.ui.components.CloudLoginDialog
 import com.example.billiardtracker.ui.components.UpdatePromptDialog
+import com.example.billiardtracker.ui.components.UpdateStage
 import com.example.billiardtracker.util.ApkInstaller
+import com.example.billiardtracker.util.InstallResult
+import kotlinx.coroutines.launch
 
 private const val SHARE_BASE = "https://billiardtracker.alekseylosev.ru/live"
 
@@ -50,23 +57,22 @@ private const val SHARE_BASE = "https://billiardtracker.alekseylosev.ru/live"
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
-    authRepo: AuthRepository,
     onBack: () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val autoCheck by viewModel.autoCheck.collectAsStateWithLifecycle()
-    val needsLogin by viewModel.needsCloudLogin.collectAsStateWithLifecycle()
     val tokensState by viewModel.tokens.collectAsStateWithLifecycle()
+    val activeTokenId by viewModel.activeTokenId.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showUpdateDialog by remember { mutableStateOf(false) }
-    var showLoginDialog by remember { mutableStateOf(false) }
+    var updateStage by remember { mutableStateOf<UpdateStage>(UpdateStage.Idle) }
     var showCreateDialog by remember { mutableStateOf(false) }
+    var tokenToRename by remember { mutableStateOf<TokenDto?>(null) }
     var tokenToDelete by remember { mutableStateOf<TokenDto?>(null) }
 
-    // Auto-load tokens once the user is logged in.
-    LaunchedEffect(needsLogin) {
-        if (!needsLogin) viewModel.refreshTokens()
-    }
+    // Refresh happens in VM init — reliable across recompositions and tab
+    // switches. No LaunchedEffect needed here.
 
     Scaffold(
         topBar = {
@@ -108,11 +114,11 @@ fun SettingsScreen(
             }
 
             MasterTokensCard(
-                needsLogin = needsLogin,
                 loading = tokensState.loading,
                 tokens = tokensState.tokens,
+                activeTokenId = activeTokenId,
                 error = tokensState.error,
-                onStartLogin = { showLoginDialog = true },
+                onActivate = { viewModel.setActiveToken(it.id) },
                 onStartCreate = { showCreateDialog = true },
                 onCopy = { token ->
                     val url = "$SHARE_BASE/$token"
@@ -128,6 +134,7 @@ fun SettingsScreen(
                     }
                     ctx.startActivity(Intent.createChooser(intent, "Отправить"))
                 },
+                onRename = { tokenToRename = it },
                 onRotate = { viewModel.rotateToken(it.id) },
                 onDelete = { tokenToDelete = it },
                 onDismissError = viewModel::clearTokensError,
@@ -138,23 +145,42 @@ fun SettingsScreen(
         if (showUpdateDialog && latest != null && latest.versionCode > ui.currentVersionCode) {
             UpdatePromptDialog(
                 latest = latest,
+                stage = updateStage,
                 onUpdate = {
+                    scope.launch {
+                        updateStage = UpdateStage.Downloading(0f)
+                        val result = ApkInstaller.downloadAndInstall(
+                            context = ctx,
+                            apkUrl = latest.apkUrl,
+                            versionName = latest.versionName,
+                            onProgress = { updateStage = UpdateStage.Downloading(it) },
+                        )
+                        when (result) {
+                            is InstallResult.Success -> {
+                                updateStage = UpdateStage.Idle
+                                showUpdateDialog = false
+                            }
+                            is InstallResult.NeedInstallPermission -> {
+                                Toast.makeText(
+                                    ctx,
+                                    "Разреши установку из этого приложения и повтори",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                                ApkInstaller.openInstallPermissionSettings(ctx)
+                                updateStage = UpdateStage.Idle
+                            }
+                            is InstallResult.Error -> {
+                                updateStage = UpdateStage.Error(result.message)
+                            }
+                        }
+                    }
+                },
+                onDismiss = { showUpdateDialog = false; updateStage = UpdateStage.Idle },
+                onSkip = {
+                    viewModel.skip(latest.versionCode)
                     showUpdateDialog = false
-                    ApkInstaller.downloadAndInstall(ctx, latest.apkUrl, latest.versionName)
+                    updateStage = UpdateStage.Idle
                 },
-                onDismiss = { showUpdateDialog = false },
-                onSkip = { viewModel.skip(latest.versionCode); showUpdateDialog = false },
-            )
-        }
-
-        if (showLoginDialog) {
-            CloudLoginDialog(
-                authRepo = authRepo,
-                onLoggedIn = {
-                    showLoginDialog = false
-                    viewModel.refreshTokens()
-                },
-                onDismiss = { showLoginDialog = false },
             )
         }
 
@@ -164,6 +190,17 @@ fun SettingsScreen(
                 onCreate = { name ->
                     viewModel.createToken(name)
                     showCreateDialog = false
+                },
+            )
+        }
+
+        tokenToRename?.let { t ->
+            RenameTokenDialog(
+                token = t,
+                onCancel = { tokenToRename = null },
+                onSave = { newName ->
+                    viewModel.renameToken(t.id, newName)
+                    tokenToRename = null
                 },
             )
         }
@@ -183,14 +220,15 @@ fun SettingsScreen(
 
 @Composable
 private fun MasterTokensCard(
-    needsLogin: Boolean,
     loading: Boolean,
     tokens: List<TokenDto>,
+    activeTokenId: Long?,
     error: String?,
-    onStartLogin: () -> Unit,
+    onActivate: (TokenDto) -> Unit,
     onStartCreate: () -> Unit,
     onCopy: (String) -> Unit,
     onShare: (String) -> Unit,
+    onRename: (TokenDto) -> Unit,
     onRotate: (TokenDto) -> Unit,
     onDelete: (TokenDto) -> Unit,
     onDismissError: () -> Unit,
@@ -199,48 +237,30 @@ private fun MasterTokensCard(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Пути мастера", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Один \"путь\" = токен-ссылка для группы друзей. Все, у кого " +
-                    "есть ссылка, увидят твои турниры онлайн через браузер.",
+                "Ссылка с токеном для тебя и друзей, для сохранения и отслеживания турниров.",
                 style = MaterialTheme.typography.bodySmall,
             )
 
-            if (needsLogin) {
-                Button(
-                    onClick = onStartLogin,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Начать путь мастера") }
-            } else {
-                if (tokens.isEmpty() && !loading) {
-                    Text(
-                        "Пока ни одного пути нет.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Button(
-                        onClick = onStartCreate,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Начать путь мастера") }
-                } else {
-                    tokens.forEachIndexed { idx, t ->
-                        if (idx > 0) HorizontalDivider()
-                        TokenRow(
-                            token = t,
-                            onCopy = { onCopy(t.token) },
-                            onShare = { onShare(t.token) },
-                            onRotate = { onRotate(t) },
-                            onDelete = { onDelete(t) },
-                        )
-                    }
-                    if (tokens.isNotEmpty()) {
-                        OutlinedButton(
-                            onClick = onStartCreate,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text("+ Ещё путь") }
-                    }
-                }
-                if (loading) {
-                    Text("Загрузка…", style = MaterialTheme.typography.bodySmall)
-                }
+            tokens.forEachIndexed { idx, t ->
+                if (idx > 0) HorizontalDivider()
+                TokenRow(
+                    token = t,
+                    isActive = t.id == activeTokenId,
+                    onActivate = { onActivate(t) },
+                    onCopy = { onCopy(t.token) },
+                    onShare = { onShare(t.token) },
+                    onRename = { onRename(t) },
+                    onRotate = { onRotate(t) },
+                    onDelete = { onDelete(t) },
+                )
             }
+            if (loading && tokens.isEmpty()) {
+                Text("Загрузка…", style = MaterialTheme.typography.bodySmall)
+            }
+            Button(
+                onClick = onStartCreate,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Ещё путь мастера") }
 
             if (error != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -260,37 +280,125 @@ private fun MasterTokensCard(
 @Composable
 private fun TokenRow(
     token: TokenDto,
+    isActive: Boolean,
+    onActivate: () -> Unit,
     onCopy: () -> Unit,
     onShare: () -> Unit,
+    onRename: () -> Unit,
     onRotate: () -> Unit,
     onDelete: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         val name = token.name?.takeIf { it.isNotBlank() } ?: "Без названия"
         val subtitle = "${token.tournamentCount} ${pluralTurniry(token.tournamentCount)}"
-        Text(name, style = MaterialTheme.typography.titleSmall)
-        Text(subtitle, style = MaterialTheme.typography.bodySmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onCopy, modifier = Modifier.weight(1f)) {
-                Text("Скопировать")
+        val isOwner = token.role != "subscriber"
+        if (isActive) {
+            Button(
+                onClick = onActivate,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                TokenRowContent(
+                    name = name,
+                    subtitle = subtitle,
+                    isOwner = isOwner,
+                    iconTint = MaterialTheme.colorScheme.onPrimary,
+                    onRename = onRename,
+                    onShare = onShare,
+                )
             }
-            OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f)) {
-                Text("Отправить")
+        } else {
+            OutlinedButton(
+                onClick = onActivate,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                TokenRowContent(
+                    name = name,
+                    subtitle = subtitle,
+                    isOwner = isOwner,
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    onRename = onRename,
+                    onShare = onShare,
+                )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onRotate, modifier = Modifier.weight(1f)) {
+        OutlinedButton(onClick = onCopy, modifier = Modifier.fillMaxWidth()) {
+            Text("Скопировать ссылку")
+        }
+        if (isOwner) {
+            OutlinedButton(onClick = onRotate, modifier = Modifier.fillMaxWidth()) {
                 Text("Новая ссылка")
             }
-            OutlinedButton(
-                onClick = onDelete,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error,
-                ),
-            ) { Text("Удалить") }
+        }
+        OutlinedButton(
+            onClick = onDelete,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.error,
+            ),
+        ) { Text(if (isOwner) "Удалить" else "Отписаться") }
+    }
+}
+
+@Composable
+private fun TokenRowContent(
+    name: String,
+    subtitle: String,
+    isOwner: Boolean,
+    iconTint: androidx.compose.ui.graphics.Color,
+    onRename: () -> Unit,
+    onShare: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(name, style = MaterialTheme.typography.titleSmall)
+            Text(
+                if (isOwner) subtitle else "$subtitle · подписан",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (isOwner) {
+            IconButton(onClick = onRename) {
+                Icon(Icons.Filled.Edit, contentDescription = "Переименовать", tint = iconTint)
+            }
+        }
+        IconButton(onClick = onShare) {
+            Icon(Icons.Filled.Share, contentDescription = "Поделиться", tint = iconTint)
         }
     }
+}
+
+@Composable
+private fun RenameTokenDialog(
+    token: TokenDto,
+    onCancel: () -> Unit,
+    onSave: (String?) -> Unit,
+) {
+    var name by remember { mutableStateOf(token.name.orEmpty()) }
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Переименовать путь") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it.take(60) },
+                label = { Text("Название") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSave(name.trim().ifEmpty { null }) },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Сохранить") }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Отмена") }
+        },
+    )
 }
 
 private fun pluralTurniry(n: Int): String {

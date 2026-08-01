@@ -14,6 +14,7 @@ data class TournamentDto(
     val status: String,
     val startedAt: Long,
     val finishedAt: Long? = null,
+    val winsRequired: Int? = null,
     val participants: List<ParticipantDto> = emptyList(),
 )
 
@@ -34,6 +35,7 @@ data class TournamentSummaryDto(
     val status: String,
     val startedAt: Long,
     val participantCount: Int,
+    val masterTokenId: Long? = null,
 )
 
 @Serializable
@@ -47,6 +49,8 @@ data class CreateTournamentBody(
     val clubId: Long? = null,
     val gameType: String,
     val moneyPerBallKop: Long? = null,
+    val winsRequired: Int? = null,
+    val masterTokenId: Long? = null,
     val participants: List<CreateParticipantBody> = emptyList(),
 )
 

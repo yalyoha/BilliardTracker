@@ -5,20 +5,22 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.billiardtracker.ui.components.BilliardTopBar
 import com.example.billiardtracker.util.PhoneMaskInput
 import com.example.billiardtracker.util.formatPhone
 
@@ -27,12 +29,12 @@ import com.example.billiardtracker.util.formatPhone
 fun ProfileScreen(viewModel: ProfileViewModel) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Профиль") }) }) { padding ->
+    Scaffold(topBar = { BilliardTopBar(title = { Text("Профиль") }) }) { padding ->
         Column(
             Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .padding(24.dp),
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
@@ -41,21 +43,27 @@ fun ProfileScreen(viewModel: ProfileViewModel) {
             )
 
             if (ui.editing) {
-                OutlinedTextField(
-                    value = ui.name,
-                    onValueChange = viewModel::setName,
-                    label = { Text("Имя") },
-                    placeholder = { Text("Как показывать в турнирах") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                PhoneMaskInput(
-                    value = ui.phoneDigits,
-                    onChange = viewModel::setPhoneDigits,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Button(onClick = viewModel::save, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (ui.saved) "Сохранено ✓" else "Сохранить")
+                Card(Modifier.fillMaxWidth()) {
+                    Column(
+                        Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = ui.name,
+                            onValueChange = viewModel::setName,
+                            label = { Text("Имя") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        PhoneMaskInput(
+                            value = ui.phoneDigits,
+                            onChange = viewModel::setPhoneDigits,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Button(onClick = viewModel::save, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (ui.saved) "Сохранено ✓" else "Сохранить")
+                        }
+                    }
                 }
             } else {
                 Card(Modifier.fillMaxWidth()) {
@@ -72,7 +80,14 @@ fun ProfileScreen(viewModel: ProfileViewModel) {
                         )
                     }
                 }
-                OutlinedButton(onClick = viewModel::startEdit, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = viewModel::startEdit,
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary,
+                    ),
+                ) {
                     Text("Изменить")
                 }
             }

@@ -12,16 +12,19 @@ import com.example.billiardtracker.data.remote.dto.DonationDto
 import com.example.billiardtracker.data.remote.dto.FinishGameBody
 import com.example.billiardtracker.data.remote.dto.GameDto
 import com.example.billiardtracker.data.remote.dto.GamesListDto
+import com.example.billiardtracker.data.remote.dto.RegisterBody
 import com.example.billiardtracker.data.remote.dto.RequestCodeBody
 import com.example.billiardtracker.data.remote.dto.RequestCodeResponse
 import com.example.billiardtracker.data.remote.dto.RotateTokenResponse
 import com.example.billiardtracker.data.remote.dto.RulesListDto
 import com.example.billiardtracker.data.remote.dto.ShotDto
 import com.example.billiardtracker.data.remote.dto.ShotsListDto
+import com.example.billiardtracker.data.remote.dto.SubscribeTokenBody
 import com.example.billiardtracker.data.remote.dto.TokenDto
 import com.example.billiardtracker.data.remote.dto.TokensListDto
 import com.example.billiardtracker.data.remote.dto.TournamentDto
 import com.example.billiardtracker.data.remote.dto.TournamentsListDto
+import com.example.billiardtracker.data.remote.dto.UpdateTokenBody
 import com.example.billiardtracker.data.remote.dto.VerifyBody
 import com.example.billiardtracker.data.remote.dto.VerifyResponse
 import com.example.billiardtracker.data.remote.dto.VersionDto
@@ -30,6 +33,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -41,14 +45,22 @@ interface ApiService {
     @POST("api/auth/verify")
     suspend fun verify(@Body body: VerifyBody): Response<VerifyResponse>
 
+    @POST("api/auth/register")
+    suspend fun register(@Body body: RegisterBody): Response<VerifyResponse>
+
     @GET("api/tournaments/mine")
-    suspend fun getMyTournaments(): Response<TournamentsListDto>
+    suspend fun getMyTournaments(
+        @Query("tokenId") tokenId: Long? = null,
+    ): Response<TournamentsListDto>
 
     @GET("api/tournaments/{id}")
     suspend fun getTournament(@Path("id") id: Long): Response<TournamentDto>
 
     @POST("api/tournaments")
     suspend fun createTournament(@Body body: CreateTournamentBody): Response<TournamentDto>
+
+    @POST("api/tournaments/{id}/finish")
+    suspend fun finishTournament(@Path("id") id: Long): Response<TournamentDto>
 
     @GET("api/tournaments/{tid}/games")
     suspend fun listGames(@Path("tid") tid: Long): Response<GamesListDto>
@@ -87,6 +99,11 @@ interface ApiService {
     @GET("version.json")
     suspend fun getVersionJson(): Response<VersionDto>
 
+    @GET("api/stats/me")
+    suspend fun getMyStats(
+        @Query("tokenId") tokenId: Long? = null,
+    ): Response<com.example.billiardtracker.data.remote.dto.StatsMeDto>
+
     @GET("api/clubs")
     suspend fun listClubs(
         @Query("near") near: String? = null,
@@ -103,11 +120,40 @@ interface ApiService {
     @POST("api/tokens")
     suspend fun createToken(@Body body: CreateTokenBody): Response<TokenDto>
 
+    /**
+     * Idempotent: returns the caller's first owned token if any, otherwise
+     * atomically creates a fresh "Путь мастера №1". Client uses this on
+     * self-heal so two concurrent VM inits can't spawn duplicate rows.
+     */
+    @POST("api/tokens/ensure-default")
+    suspend fun ensureDefaultToken(): Response<TokenDto>
+
+    /**
+     * Onboarding-only helper: create the first token using an explicit auth
+     * header instead of the AuthInterceptor. Called *after* register but
+     * *before* the JWT is persisted to prefs — atomicity guarantees we never
+     * end up with a stored JWT but no path master.
+     */
+    @POST("api/tokens")
+    suspend fun createTokenWithAuth(
+        @retrofit2.http.Header("Authorization") authorization: String,
+        @Body body: CreateTokenBody,
+    ): Response<TokenDto>
+
     @GET("api/tokens/mine")
     suspend fun listTokens(): Response<TokensListDto>
 
+    @POST("api/tokens/subscribe")
+    suspend fun subscribeToken(@Body body: SubscribeTokenBody): Response<TokenDto>
+
     @POST("api/tokens/{id}/rotate")
     suspend fun rotateToken(@Path("id") id: Long): Response<RotateTokenResponse>
+
+    @PATCH("api/tokens/{id}")
+    suspend fun updateToken(
+        @Path("id") id: Long,
+        @Body body: UpdateTokenBody,
+    ): Response<TokenDto>
 
     @DELETE("api/tokens/{id}")
     suspend fun deleteToken(@Path("id") id: Long): Response<Unit>
