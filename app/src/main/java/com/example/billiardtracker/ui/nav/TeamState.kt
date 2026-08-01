@@ -1,8 +1,18 @@
 package com.example.billiardtracker.ui.nav
 
+import com.example.billiardtracker.data.prefs.UserPrefs
 import com.example.billiardtracker.data.remote.dto.CreateParticipantBody
+import com.example.billiardtracker.data.remote.dto.TeamDto
+import com.example.billiardtracker.data.remote.dto.TeamMemberDto
+import com.example.billiardtracker.data.repo.TeamRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
+// Совместимость с UI-слоем: TeamMember и Team остаются как domain-типы,
+// но теперь маппятся из/в серверные DTO.
 data class TeamMember(val displayName: String, val phone: String?)
 
 data class Team(
@@ -12,51 +22,58 @@ data class Team(
 )
 
 /**
- * Named team presets. Each team is a saved roster of players you can quickly
- * apply to a new tournament. Lives in memory only — persistence is out of
- * scope for the current iteration. TODO: DataStore-backed if the feature
- * proves useful.
+ * Хранилище команд — теперь server-sourced под активным master_token.
+ * Синхронизируется с backend'ом на каждое переключение токена; все
+ * подписчики видят один и тот же список.
+ *
+ * Живёт в AppContainer как singleton, переживает пересоздание Composable.
  */
-class TeamState {
-    val teams = MutableStateFlow<List<Team>>(emptyList())
-    val activeTeamId = MutableStateFlow<Long?>(null)
+class TeamState(
+    private val userPrefs: UserPrefs,
+    private val repo: TeamRepository,
+    private val appScope: CoroutineScope,
+) {
+    private val _teams = MutableStateFlow<List<Team>>(emptyList())
+    val teams: StateFlow<List<Team>> = _teams.asStateFlow()
 
-    private var nextId = 1L
+    val activeTeamId: StateFlow<Long?> = MutableStateFlow<Long?>(null).also { flow ->
+        // Восстанавливаем сохранённый activeTeamId из prefs при старте.
+        appScope.launch { flow.value = userPrefs.getActiveTeamId() }
+    }.asStateFlow()
 
-    fun addTeam(name: String): Long {
-        val id = nextId++
-        val newTeam = Team(id = id, name = name.trim().ifBlank { "Команда $id" })
-        teams.value = teams.value + newTeam
-        if (activeTeamId.value == null) activeTeamId.value = id
-        return id
-    }
+    private val _activeTeamId = activeTeamId as MutableStateFlow<Long?>
 
-    fun renameTeam(id: Long, name: String) {
-        teams.value = teams.value.map {
-            if (it.id == id) it.copy(name = name.trim().ifBlank { it.name }) else it
+    init {
+        // Реактивно на смену активного токена — перезагружаем команды с сервера.
+        appScope.launch {
+            userPrefs.activeTokenIdFlow.collect { tokenId ->
+                if (tokenId == null) {
+                    _teams.value = emptyList()
+                    return@collect
+                }
+                val list = repo.list(tokenId).getOrElse { emptyList() }
+                _teams.value = list.map { it.toDomain() }
+                // Убедиться что active team существует в новом списке; иначе
+                // выбрать первый или сбросить.
+                val stored = _activeTeamId.value
+                if (stored == null || list.none { it.id == stored }) {
+                    val next = list.firstOrNull()?.id
+                    _activeTeamId.value = next
+                    userPrefs.setActiveTeamId(next)
+                }
+            }
         }
     }
 
-    fun deleteTeam(id: Long) {
-        teams.value = teams.value.filterNot { it.id == id }
-        if (activeTeamId.value == id) activeTeamId.value = teams.value.firstOrNull()?.id
-    }
+    private fun TeamDto.toDomain() = Team(
+        id = id,
+        name = name,
+        players = members.map { it.toDomain() },
+    )
 
-    fun setActiveTeam(id: Long) { activeTeamId.value = id }
+    private fun TeamMemberDto.toDomain() = TeamMember(displayName = displayName, phone = phone)
 
-    fun addPlayer(teamId: Long, member: TeamMember) {
-        teams.value = teams.value.map {
-            if (it.id == teamId) it.copy(players = it.players + member) else it
-        }
-    }
-
-    fun removePlayer(teamId: Long, index: Int) {
-        teams.value = teams.value.map {
-            if (it.id == teamId) it.copy(players = it.players.filterIndexed { i, _ -> i != index }) else it
-        }
-    }
-
-    fun teamById(id: Long?): Team? = teams.value.firstOrNull { it.id == id }
+    fun teamById(id: Long?): Team? = _teams.value.firstOrNull { it.id == id }
 
     fun asParticipantBodies(teamId: Long): List<CreateParticipantBody> =
         teamById(teamId)?.players?.map { m ->
@@ -66,4 +83,79 @@ class TeamState {
                 handicapPoints = 0,
             )
         }.orEmpty()
+
+    suspend fun addTeam(name: String): Result<Team> {
+        val tokenId = userPrefs.getActiveTokenId() ?: return Result.failure(IllegalStateException("no active token"))
+        return repo.create(tokenId, name).map { dto ->
+            val team = dto.toDomain()
+            _teams.value = _teams.value + team
+            if (_activeTeamId.value == null) {
+                _activeTeamId.value = team.id
+                userPrefs.setActiveTeamId(team.id)
+            }
+            team
+        }
+    }
+
+    suspend fun renameTeam(id: Long, name: String): Result<Unit> {
+        val tokenId = userPrefs.getActiveTokenId() ?: return Result.failure(IllegalStateException("no active token"))
+        return repo.rename(tokenId, id, name).map { dto ->
+            _teams.value = _teams.value.map { if (it.id == id) it.copy(name = dto.name) else it }
+        }
+    }
+
+    suspend fun deleteTeam(id: Long): Result<Unit> {
+        val tokenId = userPrefs.getActiveTokenId() ?: return Result.failure(IllegalStateException("no active token"))
+        return repo.delete(tokenId, id).map {
+            _teams.value = _teams.value.filterNot { it.id == id }
+            if (_activeTeamId.value == id) {
+                val next = _teams.value.firstOrNull()?.id
+                _activeTeamId.value = next
+                userPrefs.setActiveTeamId(next)
+            }
+        }
+    }
+
+    fun setActiveTeam(id: Long) {
+        _activeTeamId.value = id
+        appScope.launch { userPrefs.setActiveTeamId(id) }
+    }
+
+    /**
+     * Добавляет игрока к команде. Возвращает paired id → serverMemberId, чтобы
+     * UI мог его удалить позже.
+     */
+    suspend fun addPlayer(teamId: Long, name: String, phone: String?): Result<Unit> {
+        val tokenId = userPrefs.getActiveTokenId() ?: return Result.failure(IllegalStateException("no active token"))
+        return repo.addMember(tokenId, teamId, name, phone).map { dto ->
+            val member = TeamMember(dto.displayName, dto.phone)
+            _teams.value = _teams.value.map {
+                if (it.id == teamId) it.copy(players = it.players + member) else it
+            }
+            // Сохраняем full team refresh чтобы member.id был доступен в кеше
+            // (для удаления через removePlayerAt мы используем индекс + свежий
+            // серверный список, см. removePlayerAt).
+        }
+    }
+
+    suspend fun removePlayerAt(teamId: Long, index: Int): Result<Unit> {
+        val tokenId = userPrefs.getActiveTokenId() ?: return Result.failure(IllegalStateException("no active token"))
+        // Нужен серверный id участника — перезапрашиваем актуальный список
+        // команды и берём member по индексу.
+        val server = repo.list(tokenId).getOrElse { return Result.failure(IllegalStateException("failed to refresh")) }
+        val team = server.firstOrNull { it.id == teamId } ?: return Result.failure(IllegalStateException("team not found"))
+        val member = team.members.getOrNull(index) ?: return Result.failure(IllegalStateException("member not found"))
+        return repo.removeMember(tokenId, teamId, member.id).map {
+            _teams.value = _teams.value.map {
+                if (it.id == teamId) it.copy(players = it.players.filterIndexed { i, _ -> i != index }) else it
+            }
+        }
+    }
+
+    /** Force-refresh с сервера. */
+    suspend fun refresh() {
+        val tokenId = userPrefs.getActiveTokenId() ?: return
+        val list = repo.list(tokenId).getOrElse { return }
+        _teams.value = list.map { it.toDomain() }
+    }
 }

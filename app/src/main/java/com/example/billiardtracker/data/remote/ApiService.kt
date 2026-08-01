@@ -155,6 +155,46 @@ interface ApiService {
     @POST("api/tokens/subscribe")
     suspend fun subscribeToken(@Body body: SubscribeTokenBody): Response<TokenDto>
 
+    // Teams (пресеты) — привязаны к master_token, синхронизируются между
+    // владельцем и всеми подписчиками.
+    @GET("api/tokens/{tokenId}/teams")
+    suspend fun listTeams(
+        @Path("tokenId") tokenId: Long,
+    ): Response<com.example.billiardtracker.data.remote.dto.TeamsListDto>
+
+    @POST("api/tokens/{tokenId}/teams")
+    suspend fun createTeam(
+        @Path("tokenId") tokenId: Long,
+        @Body body: com.example.billiardtracker.data.remote.dto.CreateTeamBody,
+    ): Response<com.example.billiardtracker.data.remote.dto.TeamDto>
+
+    @PATCH("api/tokens/{tokenId}/teams/{teamId}")
+    suspend fun renameTeam(
+        @Path("tokenId") tokenId: Long,
+        @Path("teamId") teamId: Long,
+        @Body body: com.example.billiardtracker.data.remote.dto.RenameTeamBody,
+    ): Response<com.example.billiardtracker.data.remote.dto.TeamDto>
+
+    @DELETE("api/tokens/{tokenId}/teams/{teamId}")
+    suspend fun deleteTeam(
+        @Path("tokenId") tokenId: Long,
+        @Path("teamId") teamId: Long,
+    ): Response<Unit>
+
+    @POST("api/tokens/{tokenId}/teams/{teamId}/members")
+    suspend fun addTeamMember(
+        @Path("tokenId") tokenId: Long,
+        @Path("teamId") teamId: Long,
+        @Body body: com.example.billiardtracker.data.remote.dto.AddTeamMemberBody,
+    ): Response<com.example.billiardtracker.data.remote.dto.TeamMemberDto>
+
+    @DELETE("api/tokens/{tokenId}/teams/{teamId}/members/{memberId}")
+    suspend fun deleteTeamMember(
+        @Path("tokenId") tokenId: Long,
+        @Path("teamId") teamId: Long,
+        @Path("memberId") memberId: Long,
+    ): Response<Unit>
+
     @POST("api/tokens/{id}/rotate")
     suspend fun rotateToken(@Path("id") id: Long): Response<RotateTokenResponse>
 

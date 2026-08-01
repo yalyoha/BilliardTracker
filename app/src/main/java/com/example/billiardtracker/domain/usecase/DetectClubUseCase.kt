@@ -23,4 +23,13 @@ class DetectClubUseCase(
         val nearest = clubsResult.getOrNull()?.firstOrNull()
         return Result.success(Detection(loc, nearest))
     }
+
+    /**
+     * Список ближайших клубов (отсортированных по расстоянию) — для выпадающего
+     * пикера когда GPS выбрал не тот бар (соседний, или соседнее здание).
+     */
+    suspend fun nearby(radiusM: Int = 5000): List<ClubDto> {
+        val loc = locationProvider.getCurrentLocation().getOrNull() ?: return emptyList()
+        return clubRepo.listNear(loc.lat, loc.lon, radiusM = radiusM).getOrElse { emptyList() }
+    }
 }

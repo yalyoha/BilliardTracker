@@ -3,6 +3,7 @@ package com.example.billiardtracker.ui.screens.gametype
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.billiardtracker.data.prefs.UserPrefs
+import com.example.billiardtracker.data.remote.dto.ClubDto
 import com.example.billiardtracker.data.remote.dto.CreateParticipantBody
 import com.example.billiardtracker.data.remote.dto.CreateTournamentBody
 import com.example.billiardtracker.data.repo.TournamentRepository
@@ -24,6 +25,7 @@ data class StakeUiState(
     val stakeRub: String = "100",
     val winsRequired: Int = 3,
     val perParticipant: List<ParticipantStakeUi> = emptyList(),
+    val nearbyClubs: List<ClubDto> = emptyList(),
     val loading: Boolean = false,
     val error: String? = null,
     val createdTournamentId: Long? = null,
@@ -41,7 +43,6 @@ class StakeSetupViewModel(
     private val repo: TournamentRepository,
     private val userPrefs: UserPrefs,
     private val detectClub: DetectClubUseCase,
-    private val clubId: Long? = null,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(StakeUiState())
@@ -49,7 +50,7 @@ class StakeSetupViewModel(
 
     init {
         loadFromState()
-        viewModelScope.launch { autoFillTitle() }
+        viewModelScope.launch { fetchNearbyAndAutoFill() }
     }
 
     fun loadFromState() {
@@ -58,11 +59,11 @@ class StakeSetupViewModel(
         val gt = GameType.entries.firstOrNull { it.ruleFileSlug == slug } ?: return
         val profile = RuleProfile.forType(gt)
         val parts = newTournamentState.participants.value
-        _ui.value = StakeUiState(
+        _ui.value = _ui.value.copy(
             gameTypeName = gt.displayName,
             gameTypeSlug = slug,
             moneyPlayable = profile.moneyPlayable,
-            title = newTournamentState.title.value ?: "",
+            title = newTournamentState.title.value ?: _ui.value.title,
             stakeRub = "100",
             winsRequired = newTournamentState.winsRequired.value ?: 3,
             perParticipant = parts.map {
@@ -72,26 +73,42 @@ class StakeSetupViewModel(
     }
 
     /**
-     * Автозаполнение названия: "[Ближайший клуб] № N", где N — следующий
-     * свободный номер среди уже созданных турниров этого клуба. Название
-     * пользователь может переопределить вручную; если пусто — оставим авто.
+     * Загружаем список ближайших клубов и (если название пустое) авто-заполняем
+     * его по ближайшему из них. Пользователь может переопределить пикером
+     * или ввести название руками.
      */
-    private suspend fun autoFillTitle() {
-        if (_ui.value.title.isNotBlank()) return
-        val detection = detectClub().getOrNull() ?: return
-        val club = detection.nearestClub ?: return
-        val prefix = "${club.name} №"
-        val existing = repo.observeAll().first()
-            .mapNotNull { it.title }
-            .filter { it.startsWith(prefix) }
-            .mapNotNull { it.removePrefix(prefix).trim().toIntOrNull() }
-        val nextN = (existing.maxOrNull() ?: 0) + 1
-        _ui.value = _ui.value.copy(title = "$prefix $nextN")
+    private suspend fun fetchNearbyAndAutoFill() {
+        val nearby = detectClub.nearby(radiusM = 5000)
+        _ui.value = _ui.value.copy(nearbyClubs = nearby)
+        if (_ui.value.title.isBlank() && nearby.isNotEmpty()) {
+            applyClubToTitle(nearby.first())
+        }
     }
 
-    /** Re-run auto-fill (например, после того как юзер только что дал GPS-permission). */
+    /** Re-run after user granted GPS-permission. */
     fun retryAutoTitle() {
-        viewModelScope.launch { autoFillTitle() }
+        viewModelScope.launch { fetchNearbyAndAutoFill() }
+    }
+
+    fun pickClub(club: ClubDto) {
+        viewModelScope.launch { applyClubToTitle(club) }
+    }
+
+    /**
+     * "[Клуб] (N)" — N = следующий свободный номер среди уже созданных
+     * турниров с этим клубом. Скобки вместо №, чтобы визуально не путать
+     * с номером бара.
+     */
+    private suspend fun applyClubToTitle(club: ClubDto) {
+        val prefix = club.name
+        // matches "Название (12)" — только вариант со скобками; старые "№ N"
+        // тоже учитываем чтобы не сталкиваться с уже созданными.
+        val re = Regex("^${Regex.escape(prefix)}\\s*(?:\\((\\d+)\\)|№\\s*(\\d+))\$")
+        val existing = repo.observeAll().first()
+            .mapNotNull { it.title }
+            .mapNotNull { re.matchEntire(it)?.let { m -> (m.groupValues[1].ifEmpty { m.groupValues[2] }).toIntOrNull() } }
+        val nextN = (existing.maxOrNull() ?: 0) + 1
+        _ui.value = _ui.value.copy(title = "$prefix ($nextN)")
     }
 
     fun setTitle(v: String) { _ui.value = _ui.value.copy(title = v) }

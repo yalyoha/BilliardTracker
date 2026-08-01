@@ -66,6 +66,12 @@ fun StakeSetupScreen(
                 label = { Text("Название") },
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
             )
+            if (ui.nearbyClubs.isNotEmpty()) {
+                ClubPickerDropdown(
+                    clubs = ui.nearbyClubs,
+                    onPick = viewModel::pickClub,
+                )
+            }
 
             if (ui.moneyPlayable) {
                 OutlinedTextField(
@@ -118,6 +124,53 @@ fun StakeSetupScreen(
 
             if (ui.error != null) {
                 Text(ui.error!!, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ClubPickerDropdown(
+    clubs: List<com.example.billiardtracker.data.remote.dto.ClubDto>,
+    onPick: (com.example.billiardtracker.data.remote.dto.ClubDto) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        OutlinedTextField(
+            value = "Выбрать другой бар",
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Ближайшие бары (${clubs.size})") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            clubs.forEach { c ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(c.name)
+                            val dist = c.distanceM
+                            val sub = if (dist != null) {
+                                if (dist < 1000) "$dist м" else "%.1f км".format(dist / 1000.0)
+                            } else c.address ?: ""
+                            if (sub.isNotBlank()) {
+                                Text(sub, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    },
+                    onClick = { onPick(c); expanded = false },
+                )
             }
         }
     }

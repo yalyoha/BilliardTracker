@@ -6,7 +6,6 @@ import com.example.billiardtracker.data.contacts.Contact
 import com.example.billiardtracker.data.contacts.ContactsReader
 import com.example.billiardtracker.data.prefs.UserPrefs
 import com.example.billiardtracker.ui.nav.Team
-import com.example.billiardtracker.ui.nav.TeamMember
 import com.example.billiardtracker.ui.nav.TeamState
 import com.example.billiardtracker.util.digitsToE164
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +25,7 @@ data class TeamsUiState(
     val allContacts: List<Contact> = emptyList(),
     val contactsRequested: Boolean = false,
     val contactsGranted: Boolean = false,
+    val error: String? = null,
 ) {
     val filteredContacts: List<Contact>
         get() {
@@ -46,6 +46,7 @@ private data class Draft(
     val allContacts: List<Contact> = emptyList(),
     val contactsRequested: Boolean = false,
     val contactsGranted: Boolean = false,
+    val error: String? = null,
 )
 
 class TeamViewModel(
@@ -68,21 +69,45 @@ class TeamViewModel(
             allContacts = draft.allContacts,
             contactsRequested = draft.contactsRequested,
             contactsGranted = draft.contactsGranted,
+            error = draft.error,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TeamsUiState())
+
+    init {
+        // Force refresh на входе — данные могли устареть, а server — истина.
+        viewModelScope.launch { teamState.refresh() }
+    }
 
     fun setNameDraft(v: String) { _draft.value = _draft.value.copy(nameDraft = v) }
     fun setPhoneDraft(v: String) { _draft.value = _draft.value.copy(phoneDraft = v) }
     fun expandTeam(id: Long) { _draft.value = _draft.value.copy(expandedTeamId = id) }
     fun setActive(id: Long) { teamState.setActiveTeam(id) }
+    fun clearError() { _draft.value = _draft.value.copy(error = null) }
 
     fun createTeam(name: String) {
-        val id = teamState.addTeam(name)
-        _draft.value = _draft.value.copy(expandedTeamId = id)
+        viewModelScope.launch {
+            teamState.addTeam(name).fold(
+                onSuccess = { team -> _draft.value = _draft.value.copy(expandedTeamId = team.id) },
+                onFailure = { e -> _draft.value = _draft.value.copy(error = e.message ?: "Не удалось создать команду") },
+            )
+        }
     }
 
-    fun renameTeam(id: Long, name: String) = teamState.renameTeam(id, name)
-    fun deleteTeam(id: Long) = teamState.deleteTeam(id)
+    fun renameTeam(id: Long, name: String) {
+        viewModelScope.launch {
+            teamState.renameTeam(id, name).onFailure { e ->
+                _draft.value = _draft.value.copy(error = e.message ?: "Не удалось переименовать")
+            }
+        }
+    }
+
+    fun deleteTeam(id: Long) {
+        viewModelScope.launch {
+            teamState.deleteTeam(id).onFailure { e ->
+                _draft.value = _draft.value.copy(error = e.message ?: "Не удалось удалить")
+            }
+        }
+    }
 
     fun onContactsPermissionGranted(reader: ContactsReader) {
         _draft.value = _draft.value.copy(contactsGranted = true, contactsRequested = true)
@@ -108,9 +133,19 @@ class TeamViewModel(
         if (name.isBlank()) return
         val phoneDigits = _draft.value.phoneDraft.trim().ifBlank { null }
         val e164 = phoneDigits?.let { digitsToE164(it) }
-        teamState.addPlayer(teamId, TeamMember(displayName = name, phone = e164 ?: phoneDigits))
-        _draft.value = _draft.value.copy(nameDraft = "", phoneDraft = "")
+        viewModelScope.launch {
+            teamState.addPlayer(teamId, name, e164 ?: phoneDigits).fold(
+                onSuccess = { _draft.value = _draft.value.copy(nameDraft = "", phoneDraft = "") },
+                onFailure = { e -> _draft.value = _draft.value.copy(error = e.message ?: "Не удалось добавить игрока") },
+            )
+        }
     }
 
-    fun removePlayer(teamId: Long, index: Int) = teamState.removePlayer(teamId, index)
+    fun removePlayer(teamId: Long, index: Int) {
+        viewModelScope.launch {
+            teamState.removePlayerAt(teamId, index).onFailure { e ->
+                _draft.value = _draft.value.copy(error = e.message ?: "Не удалось удалить игрока")
+            }
+        }
+    }
 }

@@ -51,6 +51,7 @@ class AppContainer(context: Context) {
     val clubRepository = ClubRepository(apiService)
     val donationRepository = DonationRepository(apiService)
     val tokenRepository = TokenRepository(apiService)
+    val teamRepository = com.example.billiardtracker.data.repo.TeamRepository(apiService)
     val locationProvider = com.example.billiardtracker.data.location.LocationProvider(context.applicationContext)
     val detectClubUseCase = com.example.billiardtracker.domain.usecase.DetectClubUseCase(locationProvider, clubRepository)
     val updatePrefs: UpdatePrefs = UpdatePrefs.create(context.applicationContext)
@@ -60,7 +61,6 @@ class AppContainer(context: Context) {
     )
 
     val newTournamentState = com.example.billiardtracker.ui.nav.NewTournamentState()
-    val teamState = com.example.billiardtracker.ui.nav.TeamState()
 
     /**
      * Application-lifetime scope for multi-step flows that must survive UI
@@ -70,6 +70,11 @@ class AppContainer(context: Context) {
      * scope decouples completion from composition.)
      */
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    // Инициализируется ПОСЛЕ appScope — использует его для реактивной
+    // синхронизации команд по активному токену.
+    val teamState: com.example.billiardtracker.ui.nav.TeamState =
+        com.example.billiardtracker.ui.nav.TeamState(userPrefs, teamRepository, appScope)
 
     /**
      * Guards the "auto-create default path master when list is empty" branch

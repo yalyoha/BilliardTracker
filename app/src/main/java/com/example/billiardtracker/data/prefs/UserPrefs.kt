@@ -19,6 +19,7 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
     val phoneFlow: Flow<String?> = dataStore.data.map { it[PHONE] }
     val nameFlow: Flow<String?> = dataStore.data.map { it[NAME_LOCAL] }
     val activeTokenIdFlow: Flow<Long?> = dataStore.data.map { it[ACTIVE_TOKEN_ID] }
+    val activeTeamIdFlow: Flow<Long?> = dataStore.data.map { it[ACTIVE_TEAM_ID] }
     val pendingSharedTokenFlow: Flow<String?> = dataStore.data.map { it[PENDING_SHARED_TOKEN] }
 
     suspend fun getToken(): String? = tokenFlow.first()
@@ -26,7 +27,14 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
     suspend fun getPhone(): String? = phoneFlow.first()
     suspend fun getName(): String? = nameFlow.first()
     suspend fun getActiveTokenId(): Long? = activeTokenIdFlow.first()
+    suspend fun getActiveTeamId(): Long? = activeTeamIdFlow.first()
     suspend fun getPendingSharedToken(): String? = pendingSharedTokenFlow.first()
+
+    suspend fun setActiveTeamId(id: Long?) {
+        dataStore.edit {
+            if (id == null) it.remove(ACTIVE_TEAM_ID) else it[ACTIVE_TEAM_ID] = id
+        }
+    }
 
     suspend fun setPendingSharedToken(token: String?) {
         dataStore.edit {
@@ -66,6 +74,7 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
         private val PHONE = stringPreferencesKey("phone")
         private val NAME_LOCAL = stringPreferencesKey("name_local")
         private val ACTIVE_TOKEN_ID = longPreferencesKey("active_token_id")
+        private val ACTIVE_TEAM_ID = longPreferencesKey("active_team_id")
         private val PENDING_SHARED_TOKEN = stringPreferencesKey("pending_shared_token")
 
         fun create(context: Context): UserPrefs = UserPrefs(context.userDataStore)
