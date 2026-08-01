@@ -69,4 +69,12 @@ class GameRepository(private val api: ApiService) {
     } catch (e: Exception) {
         Result.failure(e)
     }
+
+    suspend fun transferReferee(tid: Long, toUserId: Long): Result<Unit> = try {
+        val r = api.transferReferee(tid, mapOf("toUserId" to toUserId))
+        if (r.isSuccessful) Result.success(Unit)
+        else Result.failure(IllegalStateException("HTTP ${r.code()}"))
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
 }

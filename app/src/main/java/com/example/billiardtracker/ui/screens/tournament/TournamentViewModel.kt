@@ -132,6 +132,12 @@ class TournamentViewModel(
         }
     }
 
+    fun transferReferee(toUserId: Long) {
+        viewModelScope.launch {
+            gameRepo.transferReferee(tournamentId, toUserId).onSuccess { refresh() }
+        }
+    }
+
     fun closeTournament(onDone: () -> Unit) {
         viewModelScope.launch {
             tournamentRepo.finish(tournamentId).onSuccess {

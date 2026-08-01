@@ -90,6 +90,12 @@ interface ApiService {
     @POST("api/tournaments/{id}/claim-referee")
     suspend fun claimReferee(@Path("id") id: Long): Response<ClaimRefereeResponse>
 
+    @POST("api/tournaments/{id}/transfer-referee")
+    suspend fun transferReferee(
+        @Path("id") id: Long,
+        @Body body: Map<String, Long>,
+    ): Response<Unit>
+
     @GET("api/rules")
     suspend fun listRules(): Response<RulesListDto>
 
