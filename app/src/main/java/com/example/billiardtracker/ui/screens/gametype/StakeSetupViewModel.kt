@@ -8,10 +8,12 @@ import com.example.billiardtracker.data.remote.dto.CreateTournamentBody
 import com.example.billiardtracker.data.repo.TournamentRepository
 import com.example.billiardtracker.domain.rules.GameType
 import com.example.billiardtracker.domain.rules.RuleProfile
+import com.example.billiardtracker.domain.usecase.DetectClubUseCase
 import com.example.billiardtracker.ui.nav.NewTournamentState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class StakeUiState(
@@ -19,7 +21,7 @@ data class StakeUiState(
     val gameTypeSlug: String = "",
     val moneyPlayable: Boolean = false,
     val title: String = "",
-    val stakeRub: String = "",
+    val stakeRub: String = "100",
     val winsRequired: Int = 3,
     val perParticipant: List<ParticipantStakeUi> = emptyList(),
     val loading: Boolean = false,
@@ -38,6 +40,8 @@ class StakeSetupViewModel(
     private val newTournamentState: NewTournamentState,
     private val repo: TournamentRepository,
     private val userPrefs: UserPrefs,
+    private val detectClub: DetectClubUseCase,
+    private val clubId: Long? = null,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(StakeUiState())
@@ -45,6 +49,7 @@ class StakeSetupViewModel(
 
     init {
         loadFromState()
+        viewModelScope.launch { autoFillTitle() }
     }
 
     fun loadFromState() {
@@ -58,11 +63,35 @@ class StakeSetupViewModel(
             gameTypeSlug = slug,
             moneyPlayable = profile.moneyPlayable,
             title = newTournamentState.title.value ?: "",
+            stakeRub = "100",
             winsRequired = newTournamentState.winsRequired.value ?: 3,
             perParticipant = parts.map {
                 ParticipantStakeUi(displayName = it.displayName, phone = it.phone)
             },
         )
+    }
+
+    /**
+     * Автозаполнение названия: "[Ближайший клуб] № N", где N — следующий
+     * свободный номер среди уже созданных турниров этого клуба. Название
+     * пользователь может переопределить вручную; если пусто — оставим авто.
+     */
+    private suspend fun autoFillTitle() {
+        if (_ui.value.title.isNotBlank()) return
+        val detection = detectClub().getOrNull() ?: return
+        val club = detection.nearestClub ?: return
+        val prefix = "${club.name} №"
+        val existing = repo.observeAll().first()
+            .mapNotNull { it.title }
+            .filter { it.startsWith(prefix) }
+            .mapNotNull { it.removePrefix(prefix).trim().toIntOrNull() }
+        val nextN = (existing.maxOrNull() ?: 0) + 1
+        _ui.value = _ui.value.copy(title = "$prefix $nextN")
+    }
+
+    /** Re-run auto-fill (например, после того как юзер только что дал GPS-permission). */
+    fun retryAutoTitle() {
+        viewModelScope.launch { autoFillTitle() }
     }
 
     fun setTitle(v: String) { _ui.value = _ui.value.copy(title = v) }

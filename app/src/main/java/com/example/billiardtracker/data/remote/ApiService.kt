@@ -113,6 +113,15 @@ interface ApiService {
     @POST("api/clubs")
     suspend fun createClub(@Body body: CreateClubBody): Response<ClubDto>
 
+    @PATCH("api/clubs/{id}")
+    suspend fun updateClub(
+        @Path("id") id: Long,
+        @Body body: com.example.billiardtracker.data.remote.dto.UpdateClubBody,
+    ): Response<ClubDto>
+
+    @DELETE("api/clubs/{id}")
+    suspend fun deleteClub(@Path("id") id: Long): Response<Unit>
+
     @POST("api/donations")
     suspend fun createDonation(@Body body: CreateDonationBody): Response<DonationDto>
 

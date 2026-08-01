@@ -16,10 +16,10 @@ class DetectClubUseCase(
      * Returns Detection(null, null) if no permission.
      * Returns Detection(loc, null) if location known but no club within 200m.
      */
-    suspend operator fun invoke(): Result<Detection> {
+    suspend operator fun invoke(radiusM: Int = 1000): Result<Detection> {
         val locResult = locationProvider.getCurrentLocation()
         val loc = locResult.getOrNull() ?: return Result.success(Detection(null, null))
-        val clubsResult = clubRepo.listNear(loc.lat, loc.lon, radiusM = 200)
+        val clubsResult = clubRepo.listNear(loc.lat, loc.lon, radiusM = radiusM)
         val nearest = clubsResult.getOrNull()?.firstOrNull()
         return Result.success(Detection(loc, nearest))
     }

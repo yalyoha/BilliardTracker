@@ -77,6 +77,7 @@ sealed class Route(val path: String) {
         fun build(slug: String) = "rules/$slug"
     }
     object AddClub : Route("add-club")
+    object ClubsAdmin : Route("clubs-admin")
 }
 
 private data class NavTab(val route: String, val label: String, val icon: ImageVector)
@@ -241,7 +242,11 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                     currentVersionCode = com.example.billiardtracker.BuildConfig.VERSION_CODE,
                     currentVersionName = com.example.billiardtracker.BuildConfig.VERSION_NAME,
                 )
-                SettingsScreen(vm, onBack = { nav.popBackStack() })
+                SettingsScreen(
+                    vm,
+                    onBack = { nav.popBackStack() },
+                    onOpenClubs = { nav.navigate(Route.ClubsAdmin.path) },
+                )
             }
 
             composable(Route.PickGameType.path) {
@@ -257,6 +262,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                     container.newTournamentState,
                     container.tournamentRepository,
                     container.userPrefs,
+                    container.detectClubUseCase,
                 )
                 StakeSetupScreen(
                     viewModel = vm,
@@ -319,6 +325,14 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                     viewModel = vm,
                     onBack = { nav.popBackStack() },
                     onCreated = { nav.popBackStack() },
+                )
+            }
+            composable(Route.ClubsAdmin.path) {
+                val vm = com.example.billiardtracker.ui.screens.club.ClubsAdminViewModel(container.clubRepository)
+                com.example.billiardtracker.ui.screens.club.ClubsAdminScreen(
+                    viewModel = vm,
+                    onBack = { nav.popBackStack() },
+                    onAddClub = { nav.navigate(Route.AddClub.path) },
                 )
             }
         }

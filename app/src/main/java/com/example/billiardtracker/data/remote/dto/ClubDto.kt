@@ -26,3 +26,12 @@ data class CreateClubBody(
     val lon: Double,
     val city: String? = null,
 )
+
+@Serializable
+data class UpdateClubBody(
+    val name: String? = null,
+    val address: String? = null,
+    val lat: Double? = null,
+    val lon: Double? = null,
+    val city: String? = null,
+)

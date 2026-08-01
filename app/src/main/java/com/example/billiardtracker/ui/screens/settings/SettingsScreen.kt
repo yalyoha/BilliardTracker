@@ -58,6 +58,7 @@ private const val SHARE_BASE = "https://billiardtracker.alekseylosev.ru/live"
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     onBack: () -> Unit,
+    onOpenClubs: () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val autoCheck by viewModel.autoCheck.collectAsStateWithLifecycle()
@@ -110,6 +111,20 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text(if (ui.checking) "Проверяем…" else "Проверить обновления") }
                     if (ui.message != null) Text(ui.message!!, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Клубы / Бары", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Общий список заведений. Название клуба используется в автоматическом заголовке нового турнира.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Button(
+                        onClick = onOpenClubs,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Управлять клубами") }
                 }
             }
 

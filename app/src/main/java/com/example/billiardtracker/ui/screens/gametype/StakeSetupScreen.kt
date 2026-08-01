@@ -1,5 +1,9 @@
 package com.example.billiardtracker.ui.screens.gametype
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -7,9 +11,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.billiardtracker.ui.components.BilliardTopBar
 
@@ -21,8 +27,22 @@ fun StakeSetupScreen(
     onCreated: (Long) -> Unit,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val ctx = LocalContext.current
     LaunchedEffect(Unit) { viewModel.loadFromState() }
     LaunchedEffect(ui.createdTournamentId) { ui.createdTournamentId?.let(onCreated) }
+
+    // Запрашиваем GPS-permission один раз при входе — нужно чтобы автозаполнить
+    // "[Клуб] № N" по ближайшему бару. Если пользователь отклонит — форма
+    // просто останется с пустым названием (юзер введёт вручную).
+    val locPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) viewModel.retryAutoTitle() }
+    LaunchedEffect(Unit) {
+        val already = ContextCompat.checkSelfPermission(
+            ctx, Manifest.permission.ACCESS_COARSE_LOCATION,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!already) locPermLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+    }
 
     Scaffold(
         topBar = { BilliardTopBar(
