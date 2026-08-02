@@ -13,4 +13,7 @@ data class GameEntity(
     val finishedAt: Long?,
     val winnerParticipantId: Long?,
     val lastSyncedAt: Long,
+    // Non-null → сервер знает эту игру, id может использоваться в API URL'ах.
+    // Null → offline-локальная (id отрицательный), sync ещё не завершился.
+    val serverId: Long? = null,
 )

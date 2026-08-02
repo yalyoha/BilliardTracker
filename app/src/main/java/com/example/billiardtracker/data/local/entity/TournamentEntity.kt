@@ -16,4 +16,5 @@ data class TournamentEntity(
     val startedAt: Long,
     val finishedAt: Long?,
     val lastSyncedAt: Long,
+    val serverId: Long? = null,
 )

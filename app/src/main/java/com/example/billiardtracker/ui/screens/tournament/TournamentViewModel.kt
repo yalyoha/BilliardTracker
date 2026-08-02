@@ -91,9 +91,25 @@ class TournamentViewModel(
         val gid = _ui.value.currentGame?.id ?: return
         viewModelScope.launch {
             gameRepo.addShot(gid, participantId, kind, ballNumber, pointsDelta).onSuccess { shot ->
+                // Optimistic UI: удар сразу отображается локально с локальным
+                // (отрицательным) ID. Пересчитываем currentGame.scores чтобы
+                // счёт партии обновился без ожидания сервера / SSE.
+                val newShots = _ui.value.currentGameShots + shot
+                val updatedGame = _ui.value.currentGame?.let { g ->
+                    val by = newShots.filter { it.gameId == g.id }
+                        .groupBy { it.participantId }
+                        .mapValues { (_, list) -> list.sumOf { it.pointsDelta } }
+                    g.copy(scores = by.map {
+                        com.example.billiardtracker.data.remote.dto.ScoreDto(it.key, it.value)
+                    })
+                }
                 _ui.value = _ui.value.copy(
                     lastShotIdPerGame = _ui.value.lastShotIdPerGame + (gid to shot.id),
+                    currentGameShots = newShots,
+                    currentGame = updatedGame,
                 )
+                // Refresh с сервера — обновит other-user shots + позже подставит
+                // серверный ID для только что добавленного через SyncManager.
                 refresh()
             }
         }
@@ -103,7 +119,24 @@ class TournamentViewModel(
         val gid = _ui.value.currentGame?.id ?: return
         val sid = _ui.value.lastShotIdPerGame[gid] ?: return
         viewModelScope.launch {
-            gameRepo.deleteShot(gid, sid).onSuccess { refresh() }
+            gameRepo.deleteShot(gid, sid).onSuccess {
+                // Optimistic UI: убираем локально + пересчитываем scores.
+                val newShots = _ui.value.currentGameShots.filterNot { it.id == sid }
+                val updatedGame = _ui.value.currentGame?.let { g ->
+                    val by = newShots.filter { it.gameId == g.id }
+                        .groupBy { it.participantId }
+                        .mapValues { (_, list) -> list.sumOf { it.pointsDelta } }
+                    g.copy(scores = by.map {
+                        com.example.billiardtracker.data.remote.dto.ScoreDto(it.key, it.value)
+                    })
+                }
+                _ui.value = _ui.value.copy(
+                    currentGameShots = newShots,
+                    currentGame = updatedGame,
+                    lastShotIdPerGame = _ui.value.lastShotIdPerGame - gid,
+                )
+                refresh()
+            }
         }
     }
 

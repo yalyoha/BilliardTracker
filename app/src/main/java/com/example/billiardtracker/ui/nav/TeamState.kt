@@ -36,14 +36,12 @@ class TeamState(
     private val _teams = MutableStateFlow<List<Team>>(emptyList())
     val teams: StateFlow<List<Team>> = _teams.asStateFlow()
 
-    val activeTeamId: StateFlow<Long?> = MutableStateFlow<Long?>(null).also { flow ->
-        // Восстанавливаем сохранённый activeTeamId из prefs при старте.
-        appScope.launch { flow.value = userPrefs.getActiveTeamId() }
-    }.asStateFlow()
-
-    private val _activeTeamId = activeTeamId as MutableStateFlow<Long?>
+    private val _activeTeamId = MutableStateFlow<Long?>(null)
+    val activeTeamId: StateFlow<Long?> = _activeTeamId.asStateFlow()
 
     init {
+        // Восстанавливаем сохранённый activeTeamId из prefs при старте.
+        appScope.launch { _activeTeamId.value = userPrefs.getActiveTeamId() }
         // Реактивно на смену активного токена — перезагружаем команды с сервера.
         appScope.launch {
             userPrefs.activeTokenIdFlow.collect { tokenId ->

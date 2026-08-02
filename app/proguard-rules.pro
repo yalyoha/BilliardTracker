@@ -65,3 +65,14 @@
 
 # === Отключаем предупреждения о missing classes от unused deps ===
 -dontwarn java.lang.invoke.**
+
+# === kotlinx-coroutines ===
+# CoroutineExceptionHandler + другие context elements имеют Key объекты,
+# нужны reflection-friendly.
+-keep class kotlinx.coroutines.CoroutineExceptionHandler { *; }
+-keepnames class kotlinx.coroutines.** { *; }
+-dontwarn kotlinx.coroutines.**
+
+# === WorkManager ===
+-keep class androidx.work.** { *; }
+-dontwarn androidx.work.**

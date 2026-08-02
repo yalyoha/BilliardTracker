@@ -1,18 +1,23 @@
 package com.example.billiardtracker.data.repo
 
+import com.example.billiardtracker.data.local.dao.OutboxDao
 import com.example.billiardtracker.data.local.dao.ParticipantDao
 import com.example.billiardtracker.data.local.dao.TournamentDao
+import com.example.billiardtracker.data.local.entity.OutboxOpEntity
 import com.example.billiardtracker.data.local.entity.ParticipantEntity
 import com.example.billiardtracker.data.local.entity.TournamentEntity
 import com.example.billiardtracker.data.remote.ApiService
 import com.example.billiardtracker.data.remote.dto.CreateTournamentBody
 import com.example.billiardtracker.data.remote.dto.TournamentDto
+import com.example.billiardtracker.data.sync.SyncManager
 import kotlinx.coroutines.flow.Flow
 
 class TournamentRepository(
     private val api: ApiService,
     private val tournamentDao: TournamentDao,
     private val participantDao: ParticipantDao,
+    private val outboxDao: OutboxDao? = null,
+    private val syncManager: SyncManager? = null,
 ) {
     fun observeAll(): Flow<List<TournamentEntity>> = tournamentDao.observeAll()
 
@@ -89,17 +94,57 @@ class TournamentRepository(
         Result.failure(e)
     }
 
-    suspend fun finish(id: Long): Result<TournamentDto> = try {
-        val res = api.finishTournament(id)
-        if (res.isSuccessful) {
-            val dto = res.body()!!
-            fetchDetail(id) // refresh local cache with finished status
-            Result.success(dto)
-        } else {
-            Result.failure(IllegalStateException("HTTP ${res.code()}"))
+    /**
+     * Offline-first: обновляем локальный TournamentEntity (status='finished'),
+     * enqueue op. Sync worker отправит POST /finish когда сеть будет. UI
+     * получает мгновенный успех.
+     */
+    suspend fun finish(id: Long): Result<TournamentDto> {
+        val outbox = outboxDao
+        // Fallback (тесты без Room): чистый online.
+        if (outbox == null) {
+            return try {
+                val res = api.finishTournament(id)
+                if (res.isSuccessful) {
+                    val dto = res.body()!!
+                    fetchDetail(id)
+                    Result.success(dto)
+                } else Result.failure(IllegalStateException("HTTP ${res.code()}"))
+            } catch (e: Exception) { Result.failure(e) }
         }
-    } catch (e: Exception) {
-        Result.failure(e)
+        val now = System.currentTimeMillis()
+        val local = tournamentDao.getById(id)
+        if (local != null) {
+            tournamentDao.upsert(local.copy(status = "finished", finishedAt = now))
+        }
+        outbox.insert(
+            OutboxOpEntity(
+                kind = "finish_tournament",
+                payloadJson = "",
+                endpoint = "api/tournaments/$id/finish",
+                method = "POST",
+                localTournamentId = id,
+                createdAt = now,
+            )
+        )
+        syncManager?.kickDrain()
+        // Оптимистичный DTO — VM использует его чтобы обновить UI. Часть
+        // полей (участники) не заполняем — VM держит их из refresh().
+        val existing = local
+        return Result.success(
+            TournamentDto(
+                id = id,
+                title = existing?.title,
+                gameType = existing?.gameType ?: "",
+                createdByUserId = existing?.createdByUserId ?: 0,
+                status = "finished",
+                startedAt = existing?.startedAt ?: now,
+                finishedAt = now,
+                refereeUserId = existing?.refereeUserId,
+                clubId = existing?.clubId,
+                moneyPerBallKop = existing?.moneyPerBallKop,
+            )
+        )
     }
 
     suspend fun create(body: CreateTournamentBody): Result<TournamentDto> = try {

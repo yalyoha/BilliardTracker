@@ -17,8 +17,8 @@ android {
         applicationId = "com.example.billiardtracker"
         minSdk = 28
         targetSdk = 36
-        versionCode = 54
-        versionName = "1.13.1"
+        versionCode = 60
+        versionName = "1.15.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -113,6 +113,9 @@ dependencies {
 
     // Location
     implementation(libs.play.services.location)
+
+    // WorkManager — background sync для offline-first очереди операций.
+    implementation(libs.androidx.work.runtime.ktx)
 
     testImplementation(libs.junit)
     // Test-only: parse shared/rule-profiles-expected.json for parity assertions.

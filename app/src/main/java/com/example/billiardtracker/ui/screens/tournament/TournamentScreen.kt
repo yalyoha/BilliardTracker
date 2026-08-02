@@ -22,6 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,7 +57,21 @@ fun TournamentScreen(
     onOpenPayout: () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
-    var showTransferDialog by remember { mutableStateOf(false) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    // Отслеживаем смену маркёра — показываем всем остальным toast "X стал маркёром".
+    // SSE не идёт офлайн, поэтому событие увидят только online-участники — норм.
+    var lastReferee by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(ui.tournament?.refereeUserId) {
+        val current = ui.tournament?.refereeUserId
+        val prev = lastReferee
+        if (prev != null && current != null && current != prev && current != ui.myUserId) {
+            val name = ui.tournament?.participants
+                ?.firstOrNull { it.userId == current }
+                ?.effectiveName(ui.myUserId, ui.myLocalName) ?: "Кто-то"
+            android.widget.Toast.makeText(ctx, "$name стал маркёром", android.widget.Toast.LENGTH_SHORT).show()
+        }
+        lastReferee = current
+    }
 
     Scaffold(
         topBar = {
@@ -64,10 +79,11 @@ fun TournamentScreen(
                 title = { Text(ui.tournament?.title ?: "Турнир") },
                 navigationIcon = { TextButton(onClick = onBack) { Text("Назад") } },
                 actions = {
-                    if (ui.isReferee && ui.tournament?.status == "active") {
-                        TextButton(onClick = { showTransferDialog = true }) { Text("Передать →") }
-                    } else if (!ui.isReferee) {
-                        TextButton(onClick = viewModel::claimReferee) { Text("Маркёр →") }
+                    // Только не-маркёр видит "Стать маркёром" — любой участник
+                    // может взять роль. Кнопки "Передать" убрали: role-transfer
+                    // теперь через claim от нового маркёра (online only).
+                    if (!ui.isReferee && ui.tournament?.status == "active") {
+                        TextButton(onClick = viewModel::claimReferee) { Text("Стать маркёром") }
                     }
                 },
             )
@@ -219,58 +235,7 @@ fun TournamentScreen(
             }
         }
 
-        val currentT = ui.tournament
-        if (showTransferDialog && currentT != null) {
-            TransferRefereeDialog(
-                candidates = currentT.participants.filter {
-                    it.userId != null && it.userId != ui.myUserId
-                },
-                currentUserId = ui.myUserId,
-                myLocalName = ui.myLocalName,
-                onCancel = { showTransferDialog = false },
-                onTransfer = { toUserId ->
-                    viewModel.transferReferee(toUserId)
-                    showTransferDialog = false
-                },
-            )
-        }
     }
-}
-
-@Composable
-private fun TransferRefereeDialog(
-    candidates: List<ParticipantDto>,
-    currentUserId: Long,
-    myLocalName: String?,
-    onCancel: () -> Unit,
-    onTransfer: (Long) -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = { Text("Передать роль маркёра") },
-        text = {
-            if (candidates.isEmpty()) {
-                Text("Нет других участников с зарегистрированным номером — только они могут стать маркёром.")
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        "Выбери, кому передать. Текущий маркёр сразу потеряет доступ к вводу ударов.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    candidates.forEach { p ->
-                        OutlinedButton(
-                            onClick = { onTransfer(p.userId!!) },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text(p.effectiveName(currentUserId, myLocalName)) }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Отмена") }
-        },
-        dismissButton = null,
-    )
 }
 
 @Composable
