@@ -41,7 +41,6 @@ data class TeamsUiState(
 
 private data class Draft(
     val expandedTeamId: Long? = null,
-    val collapsedByUser: Boolean = false,
     val nameDraft: String = "",
     val phoneDraft: String = "",
     val allContacts: List<Contact> = emptyList(),
@@ -64,11 +63,7 @@ class TeamViewModel(
         TeamsUiState(
             teams = teams,
             activeTeamId = active,
-            expandedTeamId = when {
-                draft.collapsedByUser -> null
-                draft.expandedTeamId != null -> draft.expandedTeamId
-                else -> active ?: teams.firstOrNull()?.id
-            },
+            expandedTeamId = draft.expandedTeamId,
             nameDraft = draft.nameDraft,
             phoneDraft = draft.phoneDraft,
             allContacts = draft.allContacts,
@@ -85,8 +80,8 @@ class TeamViewModel(
 
     fun setNameDraft(v: String) { _draft.value = _draft.value.copy(nameDraft = v) }
     fun setPhoneDraft(v: String) { _draft.value = _draft.value.copy(phoneDraft = v) }
-    fun expandTeam(id: Long) { _draft.value = _draft.value.copy(expandedTeamId = id, collapsedByUser = false) }
-    fun collapseTeam() { _draft.value = _draft.value.copy(expandedTeamId = null, collapsedByUser = true) }
+    fun expandTeam(id: Long) { _draft.value = _draft.value.copy(expandedTeamId = id) }
+    fun collapseTeam() { _draft.value = _draft.value.copy(expandedTeamId = null) }
     fun setActive(id: Long) { teamState.setActiveTeam(id) }
     fun clearError() { _draft.value = _draft.value.copy(error = null) }
 

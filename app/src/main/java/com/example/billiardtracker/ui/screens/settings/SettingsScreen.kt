@@ -272,10 +272,10 @@ private fun MasterTokensCard(
             if (loading && tokens.isEmpty()) {
                 Text("Загрузка…", style = MaterialTheme.typography.bodySmall)
             }
-            Button(
+            OutlinedButton(
                 onClick = onStartCreate,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Ещё путь мастера") }
+            ) { Text("Новый путь мастера") }
 
             if (error != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

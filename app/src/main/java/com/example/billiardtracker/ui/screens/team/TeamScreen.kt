@@ -188,7 +188,7 @@ private fun TeamCard(
     onRequestContacts: () -> Unit,
 ) {
     Card(
-        onClick = { onExpand(); onSetActive() },
+        onClick = onSetActive,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -209,8 +209,8 @@ private fun TeamCard(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                IconButton(onClick = onRename) {
-                    Icon(Icons.Filled.Edit, contentDescription = "Переименовать")
+                IconButton(onClick = { if (expanded) onCollapse() else onExpand() }) {
+                    Icon(Icons.Filled.Edit, contentDescription = if (expanded) "Свернуть" else "Редактировать")
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
@@ -222,6 +222,11 @@ private fun TeamCard(
             }
 
             if (expanded) {
+                TextButton(
+                    onClick = onRename,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Переименовать команду") }
+
                 team.players.forEachIndexed { i, p ->
                     Row(
                         Modifier.fillMaxWidth(),
