@@ -233,6 +233,10 @@ fun PayoutScreen(
                 )
             }
 
+            // Donation-блок временно скрыт (v1.15.1) — юзер тестит с
+             // друзьями, включим когда будет понимание что всё работает.
+             // Раскомментировать целиком чтобы вернуть.
+             /*
             if (winnerUserId != null && netWinKop > 0) {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -257,6 +261,7 @@ fun PayoutScreen(
                     }
                 }
             }
+             */
         }
     }
 }

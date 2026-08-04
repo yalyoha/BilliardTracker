@@ -1,9 +1,13 @@
 package com.example.billiardtracker.data.sync
 
+import com.example.billiardtracker.data.local.dao.GameDao
 import com.example.billiardtracker.data.local.dao.OutboxDao
+import com.example.billiardtracker.data.local.dao.ParticipantDao
 import com.example.billiardtracker.data.local.dao.ShotDao
+import com.example.billiardtracker.data.local.dao.TournamentDao
 import com.example.billiardtracker.data.local.entity.OutboxOpEntity
-import com.example.billiardtracker.data.remote.NetworkModule
+import com.example.billiardtracker.data.local.entity.ParticipantEntity
+import com.example.billiardtracker.data.local.entity.TournamentEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -25,6 +29,9 @@ import okhttp3.MediaType.Companion.toMediaType
 class SyncManager(
     private val outboxDao: OutboxDao,
     private val shotDao: ShotDao,
+    private val gameDao: GameDao,
+    private val tournamentDao: TournamentDao,
+    private val participantDao: ParticipantDao,
     private val networkMonitor: NetworkMonitor,
     private val appScope: CoroutineScope,
     private val baseUrl: String,
@@ -55,9 +62,12 @@ class SyncManager(
         if (!syncMutex.tryLock()) return
         try {
             val ops = try { outboxDao.pendingOps() } catch (_: Throwable) { return }
+            // Проходим все ops. НЕ прерываемся при неудаче: могут быть
+            // независимые ops дальше (напр. delete_shot для серверного shot).
+            // Deps резолвятся автоматически: parent op завершается первым по
+            // FIFO, чильд-op на след. drain'e увидит serverId.
             for (op in ops) {
-                val ok = try { executeOne(op) } catch (_: Throwable) { false }
-                if (!ok) break
+                try { executeOne(op) } catch (_: Throwable) { }
             }
             runCatching { outboxDao.purgeExecuted() }
         } finally {
@@ -65,10 +75,50 @@ class SyncManager(
         }
     }
 
+    /**
+     * Пересобирает endpoint для op'а, подставляя серверные ID вместо локальных
+     * отрицательных. Возвращает null если необходимая dep-entity ещё не
+     * синкнута (нет serverId) — SyncManager пропустит и попробует позже.
+     */
+    private suspend fun resolveEndpoint(op: OutboxOpEntity): String? {
+        val tid = op.localTournamentId
+        val gid = op.localGameId
+        val realTid = when {
+            tid == null -> null
+            tid >= 0 -> tid
+            else -> tournamentDao.getById(tid)?.serverId ?: return null
+        }
+        val realGid = when {
+            gid == null -> null
+            gid >= 0 -> gid
+            else -> gameDao.getById(gid)?.serverId ?: return null
+        }
+        return when (op.kind) {
+            "create_tournament" -> "api/tournaments"
+            "start_game" -> "api/tournaments/$realTid/games"
+            "finish_game" -> "api/tournaments/$realTid/games/$realGid/finish"
+            "finish_tournament" -> "api/tournaments/$realTid/finish"
+            "add_shot" -> "api/games/$realGid/shots"
+            "delete_shot" -> {
+                val sid = op.localShotId ?: return null
+                // Shot id хранится в outbox только для серверных shots (положительные).
+                // Локальные shots не попадают в delete_shot outbox — см. GameRepository.
+                if (sid < 0) return null
+                "api/games/$realGid/shots/$sid"
+            }
+            else -> op.endpoint
+        }
+    }
+
     private suspend fun executeOne(op: OutboxOpEntity): Boolean {
         val jwt = tokenProvider() ?: return false
+        // Пересобираем endpoint с учётом того, что local IDs (отрицательные)
+        // могли получить серверные serverId — подставляем их. Если зависимость
+        // ещё не синкнута — пропускаем op, retry позже.
+        val resolvedEndpoint = resolveEndpoint(op)
+            ?: return false // dep not ready, retry позже когда родитель синкнется
         return try {
-            val url = baseUrl.trimEnd('/') + "/" + op.endpoint.trimStart('/')
+            val url = baseUrl.trimEnd('/') + "/" + resolvedEndpoint.trimStart('/')
             val builder = Request.Builder().url(url).header("Authorization", "Bearer $jwt")
             val body = op.payloadJson.toRequestBody("application/json".toMediaType())
             when (op.method.uppercase()) {
@@ -120,9 +170,121 @@ class SyncManager(
      */
     private suspend fun onSuccess(op: OutboxOpEntity, responseBody: String) {
         when (op.kind) {
-            // finish_game / finish_tournament: локальные Room-rows уже обновлены
-            // на этапе enqueue; серверный ответ не привносит новых ID.
             "finish_game", "finish_tournament", "delete_shot" -> {}
+            "create_tournament" -> {
+                // Server response: Tournament + participants (creator + client-sent).
+                val localTid = op.localTournamentId ?: return
+                if (localTid >= 0) return
+                val serverT = runCatching {
+                    Json { ignoreUnknownKeys = true }.decodeFromString(
+                        com.example.billiardtracker.data.remote.dto.TournamentDto.serializer(),
+                        responseBody,
+                    )
+                }.getOrNull() ?: return
+                val local = tournamentDao.getById(localTid) ?: return
+                val now = System.currentTimeMillis()
+                // Replace tournament: delete local + insert with server id.
+                tournamentDao.deleteById(localTid)
+                tournamentDao.upsert(
+                    TournamentEntity(
+                        id = serverT.id,
+                        title = serverT.title,
+                        clubId = serverT.clubId,
+                        gameType = serverT.gameType,
+                        moneyPerBallKop = serverT.moneyPerBallKop,
+                        createdByUserId = serverT.createdByUserId,
+                        refereeUserId = serverT.refereeUserId,
+                        status = serverT.status,
+                        startedAt = serverT.startedAt,
+                        finishedAt = serverT.finishedAt,
+                        lastSyncedAt = now,
+                        serverId = serverT.id,
+                    )
+                )
+                // Participants remap: local list (без creator) matches
+                // server list[1..N] (первый — creator, добавленный сервером).
+                val localParts = participantDao.listByTournament(localTid)
+                val serverParts = serverT.participants
+                // Insert creator (первый в serverParts, у нас его локально не было).
+                if (serverParts.isNotEmpty()) {
+                    val creator = serverParts.first()
+                    participantDao.upsert(
+                        ParticipantEntity(
+                            id = creator.id,
+                            tournamentId = serverT.id,
+                            userId = creator.userId,
+                            displayName = creator.displayName,
+                            handicapPoints = creator.handicapPoints,
+                            perBallOverrideKop = creator.perBallOverrideKop,
+                            lastSyncedAt = now,
+                        )
+                    )
+                }
+                // Match каждый локальный participant к серверу по индексу
+                // (сервер сохраняет порядок из body.participants + creator prepended).
+                localParts.forEachIndexed { idx, local ->
+                    val serverIdx = idx + 1 // skip creator
+                    if (serverIdx >= serverParts.size) return@forEachIndexed
+                    val serverP = serverParts[serverIdx]
+                    val oldPid = local.id
+                    val newPid = serverP.id
+                    if (oldPid == newPid) return@forEachIndexed
+                    participantDao.deleteById(oldPid)
+                    participantDao.upsert(
+                        ParticipantEntity(
+                            id = newPid,
+                            tournamentId = serverT.id,
+                            userId = serverP.userId,
+                            displayName = serverP.displayName,
+                            handicapPoints = serverP.handicapPoints,
+                            perBallOverrideKop = serverP.perBallOverrideKop,
+                            lastSyncedAt = now,
+                        )
+                    )
+                    // Cascade: games.winnerParticipantId + shots.participantId.
+                    gameDao.remapWinnerParticipantId(oldPid, newPid)
+                    shotDao.remapParticipantId(oldPid, newPid)
+                }
+                // Cascade: games.tournamentId + pending outbox ops.
+                gameDao.remapTournamentId(oldTid = localTid, newTid = serverT.id)
+                outboxDao.pendingOps()
+                    .filter { it.localTournamentId == localTid }
+                    .forEach { outboxDao.update(it.copy(localTournamentId = serverT.id)) }
+            }
+            "start_game" -> {
+                // Сервер вернул Game{id: <serverId>}. Заменяем локальный
+                // GameEntity серверным (id меняется с отрицательного на
+                // положительный). Каскадно обновляем FK у shots и pending
+                // outbox-ops, чтобы всё продолжало работать.
+                val localGid = op.localGameId ?: return
+                if (localGid >= 0) return // уже серверный, ничего не делаем
+                val serverGame = runCatching {
+                    Json { ignoreUnknownKeys = true }.decodeFromString(
+                        com.example.billiardtracker.data.remote.dto.GameDto.serializer(),
+                        responseBody,
+                    )
+                }.getOrNull() ?: return
+                val local = gameDao.getById(localGid) ?: return
+                gameDao.deleteById(localGid)
+                gameDao.upsert(
+                    com.example.billiardtracker.data.local.entity.GameEntity(
+                        id = serverGame.id,
+                        tournamentId = serverGame.tournamentId,
+                        orderIndex = serverGame.orderIndex,
+                        status = serverGame.status,
+                        startedAt = serverGame.startedAt,
+                        finishedAt = serverGame.finishedAt,
+                        winnerParticipantId = serverGame.winnerParticipantId,
+                        lastSyncedAt = System.currentTimeMillis(),
+                        serverId = serverGame.id,
+                    )
+                )
+                // Cascade: shots.gameId + pending outbox ops.localGameId.
+                shotDao.remapGameId(oldGid = localGid, newGid = serverGame.id)
+                outboxDao.pendingOps()
+                    .filter { it.localGameId == localGid }
+                    .forEach { outboxDao.update(it.copy(localGameId = serverGame.id)) }
+            }
             "add_shot" -> {
                 val localShotId = op.localShotId ?: return
                 val serverShot = runCatching {

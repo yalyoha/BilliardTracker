@@ -93,6 +93,9 @@ class AppContainer(context: Context) {
         com.example.billiardtracker.data.sync.SyncManager(
             outboxDao = outboxDao,
             shotDao = shotDao,
+            gameDao = gameDao,
+            tournamentDao = tournamentDao,
+            participantDao = participantDao,
             networkMonitor = networkMonitor,
             appScope = appScope,
             baseUrl = "https://billiardtracker.alekseylosev.ru/",

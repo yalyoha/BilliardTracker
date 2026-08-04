@@ -3,8 +3,10 @@ package com.example.billiardtracker.data.repo
 import com.example.billiardtracker.data.local.dao.GameDao
 import com.example.billiardtracker.data.local.dao.OutboxDao
 import com.example.billiardtracker.data.local.dao.ShotDao
+import com.example.billiardtracker.data.local.entity.GameEntity
 import com.example.billiardtracker.data.local.entity.OutboxOpEntity
 import com.example.billiardtracker.data.local.entity.ShotEntity
+import kotlinx.coroutines.flow.first
 import com.example.billiardtracker.data.remote.ApiService
 import com.example.billiardtracker.data.remote.dto.ClaimRefereeResponse
 import com.example.billiardtracker.data.remote.dto.CreateShotBody
@@ -30,20 +32,114 @@ class GameRepository(
 
     private val json = Json { encodeDefaults = true }
 
-    suspend fun listGames(tid: Long): Result<List<GameDto>> = try {
-        val r = api.listGames(tid)
-        if (r.isSuccessful) Result.success(r.body()!!.games)
-        else Result.failure(IllegalStateException("HTTP ${r.code()}"))
-    } catch (e: Exception) {
-        Result.failure(e)
+    /**
+     * Online — API + upsert в Room. Offline — читаем из Room. Всегда
+     * возвращаем что есть, даже без сети.
+     */
+    suspend fun listGames(tid: Long): Result<List<GameDto>> {
+        val games = gameDao
+        if (tid < 0) {
+            // Локальный турнир — сервер о нём не знает, только Room.
+            return Result.success(readGamesFromRoom(tid))
+        }
+        return try {
+            val r = api.listGames(tid)
+            if (r.isSuccessful) {
+                val list = r.body()!!.games
+                // Upsert в Room чтобы offline потом мог прочитать.
+                games?.let { dao ->
+                    val now = System.currentTimeMillis()
+                    dao.upsertAll(list.map { g ->
+                        com.example.billiardtracker.data.local.entity.GameEntity(
+                            id = g.id,
+                            tournamentId = g.tournamentId,
+                            orderIndex = g.orderIndex,
+                            status = g.status,
+                            startedAt = g.startedAt,
+                            finishedAt = g.finishedAt,
+                            winnerParticipantId = g.winnerParticipantId,
+                            lastSyncedAt = now,
+                            serverId = g.id,
+                        )
+                    })
+                }
+                Result.success(list)
+            } else Result.success(readGamesFromRoom(tid))
+        } catch (e: Exception) {
+            Result.success(readGamesFromRoom(tid))
+        }
     }
 
-    suspend fun startGame(tid: Long): Result<GameDto> = try {
-        val r = api.startGame(tid)
-        if (r.isSuccessful) Result.success(r.body()!!)
-        else Result.failure(IllegalStateException("HTTP ${r.code()}"))
-    } catch (e: Exception) {
-        Result.failure(e)
+    private suspend fun readGamesFromRoom(tid: Long): List<GameDto> {
+        val games = gameDao ?: return emptyList()
+        return games.observeByTournament(tid).first().map { e ->
+            GameDto(
+                id = e.id,
+                tournamentId = e.tournamentId,
+                orderIndex = e.orderIndex,
+                status = e.status,
+                startedAt = e.startedAt,
+                finishedAt = e.finishedAt,
+                winnerParticipantId = e.winnerParticipantId,
+                scores = emptyList(),
+            )
+        }
+    }
+
+    /**
+     * Offline-first start_game. Локально создаём GameEntity с отрицательным
+     * ID + enqueue POST в outbox. SyncManager при появлении сети создаст
+     * игру на сервере и подставит серверный ID в GameEntity.serverId.
+     * Downstream ops (add_shot, finish_game) резолвят serverId в
+     * SyncManager.resolveEndpoint при отправке.
+     */
+    suspend fun startGame(tid: Long): Result<GameDto> {
+        val outbox = outboxDao
+        val games = gameDao
+        if (outbox == null || games == null) {
+            return try {
+                val r = api.startGame(tid)
+                if (r.isSuccessful) Result.success(r.body()!!)
+                else Result.failure(IllegalStateException("HTTP ${r.code()}"))
+            } catch (e: Exception) { Result.failure(e) }
+        }
+        val localId = nextLocalId()
+        val now = System.currentTimeMillis()
+        val existing = games.observeByTournament(tid).first()
+        val nextOrder = (existing.maxOfOrNull { it.orderIndex } ?: 0) + 1
+        val local = GameEntity(
+            id = localId,
+            tournamentId = tid,
+            orderIndex = nextOrder,
+            status = "active",
+            startedAt = now,
+            finishedAt = null,
+            winnerParticipantId = null,
+            lastSyncedAt = 0L,
+            serverId = null,
+        )
+        games.upsert(local)
+        outbox.insert(
+            OutboxOpEntity(
+                kind = "start_game",
+                payloadJson = "{}",
+                endpoint = "api/tournaments/$tid/games",
+                method = "POST",
+                localTournamentId = tid,
+                localGameId = localId,
+                createdAt = now,
+            )
+        )
+        syncManager?.kickDrain()
+        return Result.success(
+            GameDto(
+                id = localId,
+                tournamentId = tid,
+                orderIndex = nextOrder,
+                status = "active",
+                startedAt = now,
+            )
+        )
     }
 
     /**
@@ -203,12 +299,49 @@ class GameRepository(
         return Result.success(Unit)
     }
 
-    suspend fun listShots(gid: Long): Result<List<ShotDto>> = try {
-        val r = api.listShots(gid)
-        if (r.isSuccessful) Result.success(r.body()!!.shots)
-        else Result.failure(IllegalStateException("HTTP ${r.code()}"))
-    } catch (e: Exception) {
-        Result.failure(e)
+    suspend fun listShots(gid: Long): Result<List<ShotDto>> {
+        val shots = shotDao
+        if (gid < 0) {
+            return Result.success(readShotsFromRoom(gid))
+        }
+        return try {
+            val r = api.listShots(gid)
+            if (r.isSuccessful) {
+                val list = r.body()!!.shots
+                shots?.upsertAll(list.map { s ->
+                    ShotEntity(
+                        id = s.id,
+                        gameId = s.gameId,
+                        participantId = s.participantId,
+                        kind = s.kind,
+                        ballNumber = s.ballNumber,
+                        pointsDelta = s.pointsDelta,
+                        ts = s.ts,
+                        enteredByUserId = s.enteredByUserId,
+                        lastSyncedAt = System.currentTimeMillis(),
+                    )
+                })
+                Result.success(list)
+            } else Result.success(readShotsFromRoom(gid))
+        } catch (e: Exception) {
+            Result.success(readShotsFromRoom(gid))
+        }
+    }
+
+    private suspend fun readShotsFromRoom(gid: Long): List<ShotDto> {
+        val shots = shotDao ?: return emptyList()
+        return shots.observeByGame(gid).first().map { e ->
+            ShotDto(
+                id = e.id,
+                gameId = e.gameId,
+                participantId = e.participantId,
+                kind = e.kind,
+                ballNumber = e.ballNumber,
+                pointsDelta = e.pointsDelta,
+                ts = e.ts,
+                enteredByUserId = e.enteredByUserId,
+            )
+        }
     }
 
     suspend fun claimReferee(tid: Long): Result<ClaimRefereeResponse> = try {

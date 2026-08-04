@@ -23,4 +23,12 @@ interface ShotDao {
 
     @Query("DELETE FROM shots WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    /** Массово переназначить gameId у shots после того как GameEntity получил серверный ID. */
+    @Query("UPDATE shots SET gameId = :newGid WHERE gameId = :oldGid")
+    suspend fun remapGameId(oldGid: Long, newGid: Long)
+
+    /** После sync create_tournament — participantId у существующих shots. */
+    @Query("UPDATE shots SET participantId = :newPid WHERE participantId = :oldPid")
+    suspend fun remapParticipantId(oldPid: Long, newPid: Long)
 }

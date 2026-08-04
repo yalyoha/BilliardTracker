@@ -23,4 +23,12 @@ interface GameDao {
 
     @Query("DELETE FROM games WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    /** После sync create_tournament — переназначить FK у всех игр этого турнира. */
+    @Query("UPDATE games SET tournamentId = :newTid WHERE tournamentId = :oldTid")
+    suspend fun remapTournamentId(oldTid: Long, newTid: Long)
+
+    /** После sync create_tournament — winner тоже может ссылаться на переехавших participants. */
+    @Query("UPDATE games SET winnerParticipantId = :newPid WHERE winnerParticipantId = :oldPid")
+    suspend fun remapWinnerParticipantId(oldPid: Long, newPid: Long)
 }

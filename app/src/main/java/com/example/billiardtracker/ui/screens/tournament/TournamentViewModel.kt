@@ -64,15 +64,40 @@ class TournamentViewModel(
 
     private suspend fun refresh() {
         tournamentRepo.fetchDetail(tournamentId).onSuccess { t ->
-            val games = gameRepo.listGames(tournamentId).getOrElse { emptyList() }
-            val active = games.lastOrNull { it.status == "active" } ?: games.lastOrNull()
-            val shots = active?.id?.let { gid ->
-                gameRepo.listShots(gid).getOrElse { emptyList() }
-            } ?: emptyList()
+            val serverGames = gameRepo.listGames(tournamentId).getOrElse { emptyList() }
+            // Сохраняем локально созданные (id < 0) игры, которые ещё не
+            // синкнулись. Dedup по orderIndex: если сервер вернул game с
+            // тем же orderIndex — это тот же game после sync, предпочтём
+            // серверную версию (там актуальный id и scores).
+            val localUnsynced = _ui.value.games.filter { g ->
+                g.id < 0 && serverGames.none { it.orderIndex == g.orderIndex }
+            }
+            val mergedGames = serverGames + localUnsynced
+            val currentLocal = _ui.value.currentGame
+            val active = when {
+                // Если currentGame был локальный и sync прошёл — переключиться
+                // на серверную версию с тем же orderIndex.
+                currentLocal != null && currentLocal.id < 0 -> {
+                    serverGames.firstOrNull { it.orderIndex == currentLocal.orderIndex }
+                        ?: currentLocal.takeIf { localUnsynced.any { l -> l.id == currentLocal.id } }
+                        ?: mergedGames.lastOrNull { it.status == "active" }
+                        ?: mergedGames.lastOrNull()
+                }
+                else -> mergedGames.lastOrNull { it.status == "active" } ?: mergedGames.lastOrNull()
+            }
+            val shots = if (active == null) emptyList() else {
+                val serverShots = if (active.id >= 0)
+                    gameRepo.listShots(active.id).getOrElse { emptyList() } else emptyList()
+                // Сохраняем локальные (id<0) shots для активной игры.
+                val localShots = _ui.value.currentGameShots.filter {
+                    it.id < 0 && it.gameId == active.id
+                }
+                serverShots + localShots
+            }
             _ui.value = _ui.value.copy(
                 loading = false,
                 tournament = t,
-                games = games,
+                games = mergedGames,
                 currentGame = active,
                 currentGameShots = shots,
             )
@@ -83,7 +108,16 @@ class TournamentViewModel(
 
     fun startGame() {
         viewModelScope.launch {
-            gameRepo.startGame(tournamentId).onSuccess { refresh() }
+            gameRepo.startGame(tournamentId).onSuccess { newGame ->
+                // Optimistic UI: локально созданная игра сразу становится currentGame.
+                // Refresh() потом смёржит с серверными играми.
+                _ui.value = _ui.value.copy(
+                    games = _ui.value.games + newGame,
+                    currentGame = newGame,
+                    currentGameShots = emptyList(),
+                )
+                refresh()
+            }
         }
     }
 

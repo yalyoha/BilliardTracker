@@ -23,4 +23,10 @@ interface ParticipantDao {
 
     @Query("DELETE FROM participants WHERE tournamentId = :tournamentId")
     suspend fun deleteByTournament(tournamentId: Long)
+
+    @Query("SELECT * FROM participants WHERE tournamentId = :tournamentId ORDER BY id ASC")
+    suspend fun listByTournament(tournamentId: Long): List<ParticipantEntity>
+
+    @Query("DELETE FROM participants WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }

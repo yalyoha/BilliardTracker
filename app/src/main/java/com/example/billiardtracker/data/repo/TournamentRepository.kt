@@ -1,5 +1,6 @@
 package com.example.billiardtracker.data.repo
 
+import com.example.billiardtracker.data.local.LocalIdGenerator
 import com.example.billiardtracker.data.local.dao.OutboxDao
 import com.example.billiardtracker.data.local.dao.ParticipantDao
 import com.example.billiardtracker.data.local.dao.TournamentDao
@@ -8,9 +9,11 @@ import com.example.billiardtracker.data.local.entity.ParticipantEntity
 import com.example.billiardtracker.data.local.entity.TournamentEntity
 import com.example.billiardtracker.data.remote.ApiService
 import com.example.billiardtracker.data.remote.dto.CreateTournamentBody
+import com.example.billiardtracker.data.remote.dto.ParticipantDto
 import com.example.billiardtracker.data.remote.dto.TournamentDto
 import com.example.billiardtracker.data.sync.SyncManager
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.json.Json
 
 class TournamentRepository(
     private val api: ApiService,
@@ -19,6 +22,8 @@ class TournamentRepository(
     private val outboxDao: OutboxDao? = null,
     private val syncManager: SyncManager? = null,
 ) {
+    private val json = Json { encodeDefaults = true }
+
     fun observeAll(): Flow<List<TournamentEntity>> = tournamentDao.observeAll()
 
     suspend fun refreshMine(tokenId: Long? = null): Result<Unit> = try {
@@ -40,11 +45,9 @@ class TournamentRepository(
                     startedAt = it.startedAt,
                     finishedAt = null,
                     lastSyncedAt = now,
+                    serverId = it.id,
                 )
             }
-            // Full replace: switching the active token would otherwise leave
-            // stale tournaments from the previous token visible until they
-            // scrolled off the DAO's ordering.
             tournamentDao.deleteAll()
             tournamentDao.upsertAll(entities)
             Result.success(Unit)
@@ -53,55 +56,70 @@ class TournamentRepository(
         Result.failure(e)
     }
 
-    suspend fun fetchDetail(id: Long): Result<TournamentDto> = try {
-        val res = api.getTournament(id)
-        if (!res.isSuccessful) {
-            Result.failure(IllegalStateException("HTTP ${res.code()}"))
-        } else {
-            val dto = res.body()!!
-            val now = System.currentTimeMillis()
-            tournamentDao.upsert(
-                TournamentEntity(
-                    id = dto.id,
-                    title = dto.title,
-                    clubId = dto.clubId,
-                    gameType = dto.gameType,
-                    moneyPerBallKop = dto.moneyPerBallKop,
-                    createdByUserId = dto.createdByUserId,
-                    refereeUserId = dto.refereeUserId,
-                    status = dto.status,
-                    startedAt = dto.startedAt,
-                    finishedAt = dto.finishedAt,
-                    lastSyncedAt = now,
-                ),
-            )
-            participantDao.upsertAll(
-                dto.participants.map {
-                    ParticipantEntity(
-                        id = it.id,
-                        tournamentId = dto.id,
-                        userId = it.userId,
-                        displayName = it.displayName,
-                        handicapPoints = it.handicapPoints,
-                        perBallOverrideKop = it.perBallOverrideKop,
-                        lastSyncedAt = now,
-                    )
-                },
-            )
-            Result.success(dto)
+    /**
+     * Offline-fallback: если API упал (нет сети / 404 для локального id) —
+     * возвращаем DTO из Room. Позволяет открыть турнир offline.
+     */
+    suspend fun fetchDetail(id: Long): Result<TournamentDto> {
+        // Для локального id (< 0) API запрос бессмыслен — сразу Room.
+        if (id < 0) return fromRoom(id)
+        return try {
+            val res = api.getTournament(id)
+            if (res.isSuccessful) {
+                val dto = res.body()!!
+                cacheDetail(dto)
+                Result.success(dto)
+            } else {
+                fromRoom(id)
+            }
+        } catch (e: Exception) {
+            fromRoom(id)
         }
-    } catch (e: Exception) {
-        Result.failure(e)
     }
 
-    /**
-     * Offline-first: обновляем локальный TournamentEntity (status='finished'),
-     * enqueue op. Sync worker отправит POST /finish когда сеть будет. UI
-     * получает мгновенный успех.
-     */
+    private suspend fun fromRoom(id: Long): Result<TournamentDto> {
+        val local = tournamentDao.getById(id)
+            ?: return Result.failure(IllegalStateException("not_found_local"))
+        val parts = participantDao.listByTournament(id).map { it.toDto() }
+        return Result.success(local.toDto(parts))
+    }
+
+    private suspend fun cacheDetail(dto: TournamentDto) {
+        val now = System.currentTimeMillis()
+        tournamentDao.upsert(
+            TournamentEntity(
+                id = dto.id,
+                title = dto.title,
+                clubId = dto.clubId,
+                gameType = dto.gameType,
+                moneyPerBallKop = dto.moneyPerBallKop,
+                createdByUserId = dto.createdByUserId,
+                refereeUserId = dto.refereeUserId,
+                status = dto.status,
+                startedAt = dto.startedAt,
+                finishedAt = dto.finishedAt,
+                lastSyncedAt = now,
+                serverId = dto.id,
+            ),
+        )
+        participantDao.upsertAll(
+            dto.participants.map {
+                ParticipantEntity(
+                    id = it.id,
+                    tournamentId = dto.id,
+                    userId = it.userId,
+                    displayName = it.displayName,
+                    handicapPoints = it.handicapPoints,
+                    perBallOverrideKop = it.perBallOverrideKop,
+                    lastSyncedAt = now,
+                )
+            },
+        )
+    }
+
+    /** Offline-first finish tournament. */
     suspend fun finish(id: Long): Result<TournamentDto> {
         val outbox = outboxDao
-        // Fallback (тесты без Room): чистый online.
         if (outbox == null) {
             return try {
                 val res = api.finishTournament(id)
@@ -128,8 +146,6 @@ class TournamentRepository(
             )
         )
         syncManager?.kickDrain()
-        // Оптимистичный DTO — VM использует его чтобы обновить UI. Часть
-        // полей (участники) не заполняем — VM держит их из refresh().
         val existing = local
         return Result.success(
             TournamentDto(
@@ -147,17 +163,86 @@ class TournamentRepository(
         )
     }
 
-    suspend fun create(body: CreateTournamentBody): Result<TournamentDto> = try {
-        val res = api.createTournament(body)
-        if (!res.isSuccessful) {
-            Result.failure(IllegalStateException("HTTP ${res.code()}"))
-        } else {
-            val dto = res.body()!!
-            // Ensures locally cached with participants.
-            fetchDetail(dto.id)
-            Result.success(dto)
+    /**
+     * Offline-first create. Локально: TournamentEntity + Participants с
+     * negative IDs. Enqueue op. При sync — SyncManager делает cascade
+     * remap для games/shots/outbox по мере поступления серверных IDs.
+     */
+    suspend fun create(body: CreateTournamentBody): Result<TournamentDto> {
+        val outbox = outboxDao
+        if (outbox == null) {
+            return try {
+                val res = api.createTournament(body)
+                if (!res.isSuccessful) Result.failure(IllegalStateException("HTTP ${res.code()}"))
+                else {
+                    val dto = res.body()!!
+                    cacheDetail(dto)
+                    Result.success(dto)
+                }
+            } catch (e: Exception) { Result.failure(e) }
         }
-    } catch (e: Exception) {
-        Result.failure(e)
+        val now = System.currentTimeMillis()
+        val localTid = LocalIdGenerator.next()
+        val local = TournamentEntity(
+            id = localTid,
+            title = body.title,
+            clubId = body.clubId,
+            gameType = body.gameType,
+            moneyPerBallKop = body.moneyPerBallKop,
+            createdByUserId = 0,
+            refereeUserId = null,
+            status = "active",
+            startedAt = now,
+            finishedAt = null,
+            lastSyncedAt = 0L,
+            serverId = null,
+        )
+        tournamentDao.upsert(local)
+        val localParticipants = body.participants.map { p ->
+            ParticipantEntity(
+                id = LocalIdGenerator.next(),
+                tournamentId = localTid,
+                userId = null,
+                displayName = p.displayName,
+                handicapPoints = p.handicapPoints,
+                perBallOverrideKop = p.perBallOverrideKop,
+                lastSyncedAt = 0L,
+            )
+        }
+        participantDao.upsertAll(localParticipants)
+        outbox.insert(
+            OutboxOpEntity(
+                kind = "create_tournament",
+                payloadJson = json.encodeToString(CreateTournamentBody.serializer(), body),
+                endpoint = "api/tournaments",
+                method = "POST",
+                localTournamentId = localTid,
+                createdAt = now,
+            )
+        )
+        syncManager?.kickDrain()
+        return Result.success(local.toDto(localParticipants.map { it.toDto() }))
     }
+
+    private fun TournamentEntity.toDto(parts: List<ParticipantDto>): TournamentDto = TournamentDto(
+        id = id,
+        title = title,
+        clubId = clubId,
+        gameType = gameType,
+        moneyPerBallKop = moneyPerBallKop,
+        createdByUserId = createdByUserId,
+        refereeUserId = refereeUserId,
+        status = status,
+        startedAt = startedAt,
+        finishedAt = finishedAt,
+        participants = parts,
+    )
+
+    private fun ParticipantEntity.toDto(): ParticipantDto = ParticipantDto(
+        id = id,
+        userId = userId,
+        displayName = displayName,
+        handicapPoints = handicapPoints,
+        perBallOverrideKop = perBallOverrideKop,
+    )
 }
