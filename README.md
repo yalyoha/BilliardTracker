@@ -5,13 +5,16 @@ Android-приложение для учёта любительских турн
 ## Что делает
 
 - **14 дисциплин**: свободная / комбинированная / динамичная / классическая пирамида, малая и большая русская партия, алагёр, ярославская, колхоз, фишки, один карман, грош, свободная с продолжением, европейская пирамида. Правила в `shared/rules/*.md`, читаются приложением и бекендом.
+- **Offline-first**: приложение полностью работает без сети. Все мутации (создать турнир, начать партию, забить шар, создать команду и т.д.) сначала пишутся в Room, затем ставятся в outbox. Sync-worker разгребает очередь по цепочке зависимостей при возврате интернета. Индикатор «⏳ N» в правом верхнем углу показывает число pending-операций.
 - **Регистрация без SMS**: одна форма Имя + Телефон + confirm-диалог → атомарная связка `POST /api/auth/register` + `POST /api/tokens/ensure-default`. Никакого SMS-гейта.
-- **Пути мастера**: opaque-токены как «каналы» турниров для группы друзей. Владелец создаёт/удаляет/ротирует, шарит ссылкой; получатель тапает — приложение через App Link подписывается и подгружает историю турниров. Активный путь фильтрует и вкладку «Игра», и «Статистику».
-- **Команды-пресеты**: несколько именованных команд, каждая — список игроков. Активная команда используется при создании турнира; игроки автоподхватываются из контактов телефона.
+- **Пути мастера**: opaque-токены как «каналы» турниров для группы друзей. Владелец создаёт/удаляет/ротирует, шарит ссылкой; получатель тапает — приложение через App Link подписывается и подгружает историю турниров. Активный путь фильтрует и вкладку «Игра», и «Статистику». При создании нового пути имя авто-инкрементируется («№1» → «№2») если уже занято.
+- **Команды-пресеты (offline)**: несколько именованных команд, каждая — список игроков. Активная команда используется при создании турнира; игроки автоподхватываются из контактов телефона. Создание/переименование/удаление команд и игроков работает без сети.
 - **Турнир до N побед (1–10)**: авто-выбор победителя каждой партии по счёту, счётчик побед, баннер чемпиона при достижении N.
 - **Live-счёт**: маркёр вводит удары (шары, свояк, штраф, за борт, отменить), остальные видят обновления через SSE.
-- **Payout с неттингом**: цепочки долгов A→B→C схлопываются до минимального числа транзакций. Учитывает per-participant handicap + individual ставки.
+- **Стать Маркёром**: любой участник может «перехватить» роль маркёра одним тапом — остальным приходит toast «X стал маркёром». Требует онлайн (SSE).
+- **Payout с неттингом**: цепочки долгов A→B→C схлопываются до минимального числа транзакций. Учитывает per-participant handicap + individual ставки. Донат разработчику (3/5/10%) — опционально.
 - **Statistics**: W/L, процент побед, всего забитых шаров, средний счёт за партию по активному пути мастера.
+- **Клубы SPb+ЛО**: гео-детект ближайшего бара при создании турнира, авто-подстановка в название с выпадающим списком подсказок.
 - **Автообновление в-приложении**: скачивание APK в кеш → системный installer (без похода в браузер). Требует включённое «Установка из неизвестных источников» для BilliardTracker.
 
 ## Bottom nav (6 табов)
@@ -21,7 +24,8 @@ Android-приложение для учёта любительских турн
 ## Стек
 
 - **UI**: Compose (BOM 2025.12+), Material 3, Navigation Compose, Coil.
-- **Data**: Retrofit + kotlinx-serialization, OkHttp SSE, Room + KSP, DataStore Preferences.
+- **Data**: Retrofit + kotlinx-serialization, OkHttp SSE, Room (v4) + KSP, DataStore Preferences.
+- **Offline**: outbox pattern (`data/sync/SyncManager` + `data/local/OutboxDao`), `NetworkMonitor` через `ConnectivityManager`, `LocalIdGenerator` (AtomicLong с отрицательными ID для local-first), cascade FK-remap при получении server-id.
 - **DI**: ручной AppContainer (см. `di/AppContainer.kt`).
 - **Deep links**: `https://billiardtracker.alekseylosev.ru/live/<token>` → App Link (assetlinks.json на бекенде).
 - **minSdk 28, targetSdk 36, compileSdk 37**. R8 minify + shrinkResources → APK ~5 МБ.
@@ -62,12 +66,19 @@ node E:/PROJECTS/LAV-Server/bin/.deploy/release-billiardtracker.mjs
 
 ```
 app/src/main/java/com/example/billiardtracker/
-├── data/            # local (Room), prefs (DataStore), remote (Retrofit + DTO), repo, contacts
-├── di/              # AppContainer (ручной DI)
-├── domain/          # rules (GameType, PayoutCalculator), usecase
+├── data/
+│   ├── local/       # Room (AppDatabase v4, entities: tournament/game/shot/team/team_member/outbox_ops), LocalIdGenerator
+│   ├── prefs/       # DataStore (UserPrefs, UpdatePrefs)
+│   ├── remote/      # Retrofit + DTO + SseClient
+│   ├── repo/        # Repositories (Tournament/Game/Team/Auth/Token/... — все offline-first)
+│   ├── sync/        # NetworkMonitor + SyncManager (outbox drainer, cascade ID remap)
+│   ├── location/    # LocationProvider (гео-детект клуба)
+│   └── contacts/    # ContactsReader (READ_CONTACTS для подсказок)
+├── di/              # AppContainer (ручной DI + Room migrations 1→2→3→4)
+├── domain/          # rules (GameType, PayoutCalculator), usecase (DetectClubUseCase)
 ├── ui/
 │   ├── components/  # BilliardTopBar, UpdatePromptDialog
-│   ├── nav/         # BilliardNavHost, TeamState, NewTournamentState
+│   ├── nav/         # BilliardNavHost (+ pending-sync overlay-бейдж), TeamState, NewTournamentState
 │   ├── screens/     # onboarding, home, team, profile, rules, stats, settings,
 │   │                # gametype (PickGameType + StakeSetup), tournament (+ PayoutScreen), club
 │   └── theme/       # Color, Theme (bilyard green + gold accent)
