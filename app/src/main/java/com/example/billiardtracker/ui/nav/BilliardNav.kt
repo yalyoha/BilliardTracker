@@ -148,6 +148,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                         currentRoute == tab.route -> true
                         tab.route == Route.Game.path && currentRoute in gameFlowRoutes -> true
                         tab.route == Route.Rules.path && currentRoute == Route.RuleDetail.path -> true
+                        tab.route == Route.Settings.path && currentRoute == Route.ClubsAdmin.path -> true
                         else -> backStack?.destination?.hierarchy?.any { it.route == tab.route } == true
                     }
                     NavigationBarItem(
