@@ -59,6 +59,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onBack: () -> Unit,
     onOpenClubs: () -> Unit,
+    onOpenRules: () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val autoCheck by viewModel.autoCheck.collectAsStateWithLifecycle()
@@ -111,6 +112,20 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text(if (ui.checking) "Проверяем…" else "Проверить обновления") }
                     if (ui.message != null) Text(ui.message!!, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Правила дисциплин", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Справочник правил 14 дисциплин русского бильярда.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Button(
+                        onClick = onOpenRules,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Правила игр") }
                 }
             }
 

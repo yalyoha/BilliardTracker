@@ -14,6 +14,9 @@ import com.example.billiardtracker.data.local.entity.TeamMemberEntity
 import com.example.billiardtracker.data.local.entity.TournamentEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -45,6 +48,11 @@ class SyncManager(
 ) {
     private val http = OkHttpClient()
     private val syncMutex = Mutex()
+
+    // Broadcast: local id → server id. Слушатели (TeamState / ViewModels)
+    // могут смигрировать своё in-memory состояние без полного refresh.
+    private val _teamIdRemaps = MutableSharedFlow<Pair<Long, Long>>(extraBufferCapacity = 32)
+    val teamIdRemaps: SharedFlow<Pair<Long, Long>> = _teamIdRemaps.asSharedFlow()
 
     init {
         // Триггер: как только сеть появилась — драйним очередь. Ошибки
@@ -217,6 +225,7 @@ class SyncManager(
                 outboxDao.pendingOps()
                     .filter { it.localTeamId == localTeamId }
                     .forEach { outboxDao.update(it.copy(localTeamId = serverTeam.id)) }
+                _teamIdRemaps.tryEmit(localTeamId to serverTeam.id)
             }
             "add_team_member" -> {
                 val localMemberId = op.localMemberId ?: return

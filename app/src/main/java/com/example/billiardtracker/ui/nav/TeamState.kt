@@ -5,8 +5,10 @@ import com.example.billiardtracker.data.remote.dto.CreateParticipantBody
 import com.example.billiardtracker.data.remote.dto.TeamDto
 import com.example.billiardtracker.data.remote.dto.TeamMemberDto
 import com.example.billiardtracker.data.repo.TeamRepository
+import com.example.billiardtracker.data.sync.SyncManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -32,12 +34,18 @@ class TeamState(
     private val userPrefs: UserPrefs,
     private val repo: TeamRepository,
     private val appScope: CoroutineScope,
+    private val syncManager: SyncManager,
 ) {
     private val _teams = MutableStateFlow<List<Team>>(emptyList())
     val teams: StateFlow<List<Team>> = _teams.asStateFlow()
 
     private val _activeTeamId = MutableStateFlow<Long?>(null)
     val activeTeamId: StateFlow<Long?> = _activeTeamId.asStateFlow()
+
+    // Local→server id-remap событий, форвардится из SyncManager. UI-слой
+    // (ViewModel) подписывается, чтобы обновить draft.expandedTeamId и не
+    // «слетать» с редактирования после успешной синхронизации.
+    val teamIdRemaps: SharedFlow<Pair<Long, Long>> = syncManager.teamIdRemaps
 
     init {
         // Восстанавливаем сохранённый activeTeamId из prefs при старте.
@@ -58,6 +66,18 @@ class TeamState(
                     val next = list.firstOrNull()?.id
                     _activeTeamId.value = next
                     userPrefs.setActiveTeamId(next)
+                }
+            }
+        }
+        // Слушаем id-remaps от SyncManager: заменяем локальный id на серверный
+        // в _teams и в _activeTeamId. Иначе после успешного sync карточка
+        // «сворачивается» и последующие addPlayer шлют устаревший локальный id.
+        appScope.launch {
+            syncManager.teamIdRemaps.collect { (local, server) ->
+                _teams.value = _teams.value.map { if (it.id == local) it.copy(id = server) else it }
+                if (_activeTeamId.value == local) {
+                    _activeTeamId.value = server
+                    userPrefs.setActiveTeamId(server)
                 }
             }
         }

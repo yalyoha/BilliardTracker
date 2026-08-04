@@ -76,6 +76,16 @@ class TeamViewModel(
     init {
         // Force refresh на входе — данные могли устареть, а server — истина.
         viewModelScope.launch { teamState.refresh() }
+        // Мигрируем draft.expandedTeamId когда sync поменял локальный id на
+        // серверный — иначе карточка «сворачивается» после успешной
+        // синхронизации (id не совпадает) и юзер думает, что форма пропала.
+        viewModelScope.launch {
+            teamState.teamIdRemaps.collect { (local, server) ->
+                if (_draft.value.expandedTeamId == local) {
+                    _draft.value = _draft.value.copy(expandedTeamId = server)
+                }
+            }
+        }
     }
 
     fun setNameDraft(v: String) { _draft.value = _draft.value.copy(nameDraft = v) }

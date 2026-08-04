@@ -89,7 +89,6 @@ private val TABS = listOf(
     NavTab(Route.Game.path, "Игра", Icons.Filled.EmojiEvents),
     NavTab(Route.Team.path, "Команды", Icons.Filled.Groups),
     NavTab(Route.Profile.path, "Профиль", Icons.Filled.Person),
-    NavTab(Route.Rules.path, "Правила", Icons.Filled.Article),
     NavTab(Route.Stats.path, "Статистика", Icons.Filled.QueryStats),
     NavTab(Route.Settings.path, "Настройки", Icons.Filled.Settings),
 )
@@ -147,8 +146,11 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                     val selected = when {
                         currentRoute == tab.route -> true
                         tab.route == Route.Game.path && currentRoute in gameFlowRoutes -> true
-                        tab.route == Route.Rules.path && currentRoute == Route.RuleDetail.path -> true
-                        tab.route == Route.Settings.path && currentRoute == Route.ClubsAdmin.path -> true
+                        tab.route == Route.Settings.path && (
+                            currentRoute == Route.ClubsAdmin.path ||
+                            currentRoute == Route.Rules.path ||
+                            currentRoute == Route.RuleDetail.path
+                        ) -> true
                         else -> backStack?.destination?.hierarchy?.any { it.route == tab.route } == true
                     }
                     NavigationBarItem(
@@ -230,7 +232,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                 val vm = RulesListViewModel(container.ruleRepository)
                 RulesListScreen(
                     viewModel = vm,
-                    onBack = null,
+                    onBack = { nav.popBackStack() },
                     onOpen = { slug -> nav.navigate(Route.RuleDetail.build(slug)) },
                 )
             }
@@ -252,6 +254,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                     vm,
                     onBack = { nav.popBackStack() },
                     onOpenClubs = { nav.navigate(Route.ClubsAdmin.path) },
+                    onOpenRules = { nav.navigate(Route.Rules.path) },
                 )
             }
 

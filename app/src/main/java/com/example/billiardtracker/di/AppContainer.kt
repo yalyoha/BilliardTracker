@@ -179,7 +179,7 @@ class AppContainer(context: Context) {
     val newTournamentState = com.example.billiardtracker.ui.nav.NewTournamentState()
 
     val teamState: com.example.billiardtracker.ui.nav.TeamState =
-        com.example.billiardtracker.ui.nav.TeamState(userPrefs, teamRepository, appScope)
+        com.example.billiardtracker.ui.nav.TeamState(userPrefs, teamRepository, appScope, syncManager)
 
     val tokenSelfHealMutex: Mutex = Mutex()
 
