@@ -1,7 +1,10 @@
 package com.example.billiardtracker.ui.nav
 
 import android.widget.Toast
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.EmojiEvents
@@ -175,11 +178,13 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
             }
         },
     ) { padding ->
-        NavHost(
-            navController = nav,
-            startDestination = Route.Game.path,
-            modifier = Modifier.padding(padding),
-        ) {
+        val pendingSync by container.pendingSyncCount.collectAsStateWithLifecycle(0)
+        androidx.compose.foundation.layout.Box(Modifier.padding(padding).fillMaxSize()) {
+            NavHost(
+                navController = nav,
+                startDestination = Route.Game.path,
+                modifier = Modifier.fillMaxSize(),
+            ) {
             composable(Route.Game.path) {
                 val vm = HomeViewModel(container.tournamentRepository, container.userPrefs)
                 HomeScreen(
@@ -334,6 +339,25 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                     onBack = { nav.popBackStack() },
                     onAddClub = { nav.navigate(Route.AddClub.path) },
                 )
+            }
+            }
+            // Overlay: pending offline-ops counter. Виден только когда > 0.
+            if (pendingSync > 0) {
+                androidx.compose.material3.Surface(
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.TopEnd)
+                        .padding(8.dp),
+                    shape = androidx.compose.material3.MaterialTheme.shapes.small,
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.tertiaryContainer,
+                    tonalElevation = 2.dp,
+                ) {
+                    androidx.compose.material3.Text(
+                        "⏳ $pendingSync",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                }
             }
         }
     }

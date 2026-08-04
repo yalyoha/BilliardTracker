@@ -99,6 +99,7 @@ fun TeamScreen(viewModel: TeamViewModel) {
                         expanded = team.id == ui.expandedTeamId,
                         ui = ui,
                         onExpand = { viewModel.expandTeam(team.id) },
+                        onCollapse = viewModel::collapseTeam,
                         onSetActive = { viewModel.setActive(team.id) },
                         onRename = { teamToRename = team },
                         onDelete = { teamToDelete = team },
@@ -175,6 +176,7 @@ private fun TeamCard(
     expanded: Boolean,
     ui: TeamsUiState,
     onExpand: () -> Unit,
+    onCollapse: () -> Unit,
     onSetActive: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
@@ -283,6 +285,10 @@ private fun TeamCard(
                 Button(onClick = onAddPlayer, modifier = Modifier.fillMaxWidth()) {
                     Text("Добавить игрока")
                 }
+                Button(
+                    onClick = onCollapse,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Сохранить команду") }
             }
         }
     }

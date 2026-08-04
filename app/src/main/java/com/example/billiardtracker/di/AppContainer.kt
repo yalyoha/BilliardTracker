@@ -57,12 +57,45 @@ class AppContainer(context: Context) {
         }
     }
 
+    // Migration v3→v4: локальные таблицы для команд (offline team CRUD) +
+    // расширяем outbox_ops новыми nullable колонками для team ops.
+    private val migration3to4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS teams (
+                    id             INTEGER NOT NULL PRIMARY KEY,
+                    masterTokenId  INTEGER NOT NULL,
+                    name           TEXT    NOT NULL,
+                    createdAt      INTEGER NOT NULL,
+                    serverId       INTEGER
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS team_members (
+                    id            INTEGER NOT NULL PRIMARY KEY,
+                    teamId        INTEGER NOT NULL,
+                    displayName   TEXT    NOT NULL,
+                    phone         TEXT,
+                    addedAt       INTEGER NOT NULL,
+                    serverId      INTEGER
+                )
+                """.trimIndent()
+            )
+            db.execSQL("ALTER TABLE outbox_ops ADD COLUMN localTeamId INTEGER")
+            db.execSQL("ALTER TABLE outbox_ops ADD COLUMN localMemberId INTEGER")
+            db.execSQL("ALTER TABLE outbox_ops ADD COLUMN masterTokenId INTEGER")
+        }
+    }
+
     val db: AppDatabase = Room.databaseBuilder(
         context.applicationContext,
         AppDatabase::class.java,
         "billiardtracker.db",
     )
-        .addMigrations(migration1to2, migration2to3)
+        .addMigrations(migration1to2, migration2to3, migration3to4)
         .fallbackToDestructiveMigration(true)
         .build()
 
@@ -73,6 +106,8 @@ class AppContainer(context: Context) {
     val clubDao get() = db.clubDao()
     val ruleDao get() = db.ruleDao()
     val outboxDao get() = db.outboxDao()
+    val teamDao get() = db.teamDao()
+    val teamMemberDao get() = db.teamMemberDao()
 
     // ----- Infrastructure -----
     val networkMonitor: com.example.billiardtracker.data.sync.NetworkMonitor =
@@ -96,6 +131,8 @@ class AppContainer(context: Context) {
             gameDao = gameDao,
             tournamentDao = tournamentDao,
             participantDao = participantDao,
+            teamDao = teamDao,
+            teamMemberDao = teamMemberDao,
             networkMonitor = networkMonitor,
             appScope = appScope,
             baseUrl = "https://billiardtracker.alekseylosev.ru/",
@@ -123,7 +160,13 @@ class AppContainer(context: Context) {
     val clubRepository = ClubRepository(apiService)
     val donationRepository = DonationRepository(apiService)
     val tokenRepository = TokenRepository(apiService)
-    val teamRepository = com.example.billiardtracker.data.repo.TeamRepository(apiService)
+    val teamRepository = com.example.billiardtracker.data.repo.TeamRepository(
+        api = apiService,
+        teamDao = teamDao,
+        memberDao = teamMemberDao,
+        outboxDao = outboxDao,
+        syncManager = syncManager,
+    )
 
     // ----- Domain / UI helpers -----
     val locationProvider = com.example.billiardtracker.data.location.LocationProvider(context.applicationContext)
@@ -139,4 +182,9 @@ class AppContainer(context: Context) {
         com.example.billiardtracker.ui.nav.TeamState(userPrefs, teamRepository, appScope)
 
     val tokenSelfHealMutex: Mutex = Mutex()
+
+    /**
+     * Flow количества pending offline-ops. UI показывает "⏳ N" когда > 0.
+     */
+    val pendingSyncCount: kotlinx.coroutines.flow.Flow<Int> = outboxDao.observePendingCount()
 }

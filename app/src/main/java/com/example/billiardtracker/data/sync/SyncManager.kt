@@ -4,9 +4,13 @@ import com.example.billiardtracker.data.local.dao.GameDao
 import com.example.billiardtracker.data.local.dao.OutboxDao
 import com.example.billiardtracker.data.local.dao.ParticipantDao
 import com.example.billiardtracker.data.local.dao.ShotDao
+import com.example.billiardtracker.data.local.dao.TeamDao
+import com.example.billiardtracker.data.local.dao.TeamMemberDao
 import com.example.billiardtracker.data.local.dao.TournamentDao
 import com.example.billiardtracker.data.local.entity.OutboxOpEntity
 import com.example.billiardtracker.data.local.entity.ParticipantEntity
+import com.example.billiardtracker.data.local.entity.TeamEntity
+import com.example.billiardtracker.data.local.entity.TeamMemberEntity
 import com.example.billiardtracker.data.local.entity.TournamentEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -32,6 +36,8 @@ class SyncManager(
     private val gameDao: GameDao,
     private val tournamentDao: TournamentDao,
     private val participantDao: ParticipantDao,
+    private val teamDao: TeamDao,
+    private val teamMemberDao: TeamMemberDao,
     private val networkMonitor: NetworkMonitor,
     private val appScope: CoroutineScope,
     private val baseUrl: String,
@@ -83,6 +89,7 @@ class SyncManager(
     private suspend fun resolveEndpoint(op: OutboxOpEntity): String? {
         val tid = op.localTournamentId
         val gid = op.localGameId
+        val teamId = op.localTeamId
         val realTid = when {
             tid == null -> null
             tid >= 0 -> tid
@@ -93,6 +100,12 @@ class SyncManager(
             gid >= 0 -> gid
             else -> gameDao.getById(gid)?.serverId ?: return null
         }
+        val realTeamId = when {
+            teamId == null -> null
+            teamId >= 0 -> teamId
+            else -> teamDao.getById(teamId)?.serverId ?: return null
+        }
+        val tokenId = op.masterTokenId
         return when (op.kind) {
             "create_tournament" -> "api/tournaments"
             "start_game" -> "api/tournaments/$realTid/games"
@@ -101,10 +114,17 @@ class SyncManager(
             "add_shot" -> "api/games/$realGid/shots"
             "delete_shot" -> {
                 val sid = op.localShotId ?: return null
-                // Shot id хранится в outbox только для серверных shots (положительные).
-                // Локальные shots не попадают в delete_shot outbox — см. GameRepository.
                 if (sid < 0) return null
                 "api/games/$realGid/shots/$sid"
+            }
+            "create_team" -> "api/tokens/$tokenId/teams"
+            "rename_team" -> "api/tokens/$tokenId/teams/$realTeamId"
+            "delete_team" -> "api/tokens/$tokenId/teams/$realTeamId"
+            "add_team_member" -> "api/tokens/$tokenId/teams/$realTeamId/members"
+            "delete_team_member" -> {
+                val mid = op.localMemberId ?: return null
+                if (mid < 0) return null
+                "api/tokens/$tokenId/teams/$realTeamId/members/$mid"
             }
             else -> op.endpoint
         }
@@ -170,7 +190,60 @@ class SyncManager(
      */
     private suspend fun onSuccess(op: OutboxOpEntity, responseBody: String) {
         when (op.kind) {
-            "finish_game", "finish_tournament", "delete_shot" -> {}
+            "finish_game", "finish_tournament", "delete_shot",
+            "rename_team", "delete_team", "delete_team_member" -> {}
+            "create_team" -> {
+                val localTeamId = op.localTeamId ?: return
+                if (localTeamId >= 0) return
+                val serverTeam = runCatching {
+                    Json { ignoreUnknownKeys = true }.decodeFromString(
+                        com.example.billiardtracker.data.remote.dto.TeamDto.serializer(),
+                        responseBody,
+                    )
+                }.getOrNull() ?: return
+                val local = teamDao.getById(localTeamId) ?: return
+                teamDao.deleteById(localTeamId)
+                teamDao.upsert(
+                    TeamEntity(
+                        id = serverTeam.id,
+                        masterTokenId = serverTeam.masterTokenId,
+                        name = serverTeam.name,
+                        createdAt = serverTeam.createdAt,
+                        serverId = serverTeam.id,
+                    )
+                )
+                // Cascade: team_members.teamId + pending outbox ops.
+                teamMemberDao.remapTeamId(localTeamId, serverTeam.id)
+                outboxDao.pendingOps()
+                    .filter { it.localTeamId == localTeamId }
+                    .forEach { outboxDao.update(it.copy(localTeamId = serverTeam.id)) }
+            }
+            "add_team_member" -> {
+                val localMemberId = op.localMemberId ?: return
+                if (localMemberId >= 0) return
+                val serverMember = runCatching {
+                    Json { ignoreUnknownKeys = true }.decodeFromString(
+                        com.example.billiardtracker.data.remote.dto.TeamMemberDto.serializer(),
+                        responseBody,
+                    )
+                }.getOrNull() ?: return
+                val local = teamMemberDao.getById(localMemberId) ?: return
+                teamMemberDao.deleteById(localMemberId)
+                teamMemberDao.upsert(
+                    TeamMemberEntity(
+                        id = serverMember.id,
+                        teamId = serverMember.teamId,
+                        displayName = serverMember.displayName,
+                        phone = serverMember.phone,
+                        addedAt = serverMember.addedAt,
+                        serverId = serverMember.id,
+                    )
+                )
+                // Pending outbox ops (delete_team_member) с этим локальным id.
+                outboxDao.pendingOps()
+                    .filter { it.localMemberId == localMemberId }
+                    .forEach { outboxDao.update(it.copy(localMemberId = serverMember.id)) }
+            }
             "create_tournament" -> {
                 // Server response: Tournament + participants (creator + client-sent).
                 val localTid = op.localTournamentId ?: return

@@ -137,14 +137,11 @@ class SettingsViewModel(
     fun createToken(name: String?) {
         _tokens.value = _tokens.value.copy(loading = true, error = null)
         viewModelScope.launch {
-            tokenRepo.create(name).fold(
-                onSuccess = {
-                    // Re-fetch from server rather than appending locally: keeps
-                    // ordering + tournamentCount consistent, and avoids the
-                    // list-desync users hit when local optimistic state raced
-                    // with a background refresh.
-                    reloadTokens()
-                },
+            val base = name?.takeIf { it.isNotBlank() } ?: "Путь мастера №1"
+            val existingNames = _tokens.value.tokens.mapNotNull { it.name?.takeIf { s -> s.isNotBlank() } }
+            val unique = uniqueName(base, existingNames)
+            tokenRepo.create(unique).fold(
+                onSuccess = { reloadTokens() },
                 onFailure = { e ->
                     _tokens.value = _tokens.value.copy(
                         loading = false,
@@ -152,6 +149,28 @@ class SettingsViewModel(
                     )
                 },
             )
+        }
+    }
+
+    /**
+     * Уникализирует имя: если base уже занят, инкрементим "№N" в хвосте
+     * (или добавляем " №2" если хвоста нет). Проверяем по циклу пока не
+     * найдём свободный вариант.
+     */
+    private fun uniqueName(base: String, existing: List<String>): String {
+        if (base !in existing) return base
+        val re = Regex("^(.+?)\\s*№\\s*(\\d+)\\s*$")
+        val m = re.matchEntire(base)
+        val (prefix, startN) = if (m != null) {
+            m.groupValues[1].trim() to (m.groupValues[2].toIntOrNull() ?: 1)
+        } else {
+            base to 1
+        }
+        var n = startN + 1
+        while (true) {
+            val candidate = "$prefix №$n"
+            if (candidate !in existing) return candidate
+            n++
         }
     }
 
