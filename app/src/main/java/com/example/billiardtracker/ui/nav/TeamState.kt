@@ -109,7 +109,11 @@ class TeamState(
             _teams.value = _teams.value + team
             if (_activeTeamId.value == null) {
                 _activeTeamId.value = team.id
-                userPrefs.setActiveTeamId(team.id)
+                // Fire-and-forget: suspend внутри .map даёт sync-корутине шанс
+                // отработать до того, как VM успеет установить expandedTeamId
+                // на возвращённый local id → id-remap эмитится с _draft.expandedTeamId==null,
+                // не мэтчится, и после fold мы остаёмся со stale local id.
+                appScope.launch { userPrefs.setActiveTeamId(team.id) }
             }
             team
         }

@@ -98,7 +98,16 @@ class TeamViewModel(
     fun createTeam(name: String) {
         viewModelScope.launch {
             teamState.addTeam(name).fold(
-                onSuccess = { team -> _draft.value = _draft.value.copy(expandedTeamId = team.id) },
+                onSuccess = { team ->
+                    // Defense: sync мог успеть переопределить local id на server id
+                    // между addTeam и fold (гонка suspend внутри addTeam.map). Если
+                    // возвращённого team.id уже нет в _teams — берём последнюю
+                    // добавленную команду (addTeam кладёт в конец списка).
+                    val teams = teamState.teams.value
+                    val actualId = if (teams.any { it.id == team.id }) team.id
+                                   else teams.lastOrNull()?.id ?: team.id
+                    _draft.value = _draft.value.copy(expandedTeamId = actualId)
+                },
                 onFailure = { e -> _draft.value = _draft.value.copy(error = e.message ?: "Не удалось создать команду") },
             )
         }
