@@ -167,8 +167,13 @@ class TournamentRepository(
      * Offline-first create. Локально: TournamentEntity + Participants с
      * negative IDs. Enqueue op. При sync — SyncManager делает cascade
      * remap для games/shots/outbox по мере поступления серверных IDs.
+     *
+     * currentUserId — id залогиненого юзера, используется для локального
+     * зеркала серверного поведения (`created_by_user_id` = `referee_user_id`
+     * = userId, см. backend/routes/tournaments.js). Без этого `isReferee`
+     * в TournamentViewModel был бы false до первой удачной синхронизации.
      */
-    suspend fun create(body: CreateTournamentBody): Result<TournamentDto> {
+    suspend fun create(body: CreateTournamentBody, currentUserId: Long): Result<TournamentDto> {
         val outbox = outboxDao
         if (outbox == null) {
             return try {
@@ -189,8 +194,8 @@ class TournamentRepository(
             clubId = body.clubId,
             gameType = body.gameType,
             moneyPerBallKop = body.moneyPerBallKop,
-            createdByUserId = 0,
-            refereeUserId = null,
+            createdByUserId = currentUserId,
+            refereeUserId = currentUserId,
             status = "active",
             startedAt = now,
             finishedAt = null,

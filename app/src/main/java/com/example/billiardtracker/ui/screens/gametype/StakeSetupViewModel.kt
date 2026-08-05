@@ -135,6 +135,7 @@ class StakeSetupViewModel(
         _ui.value = _ui.value.copy(loading = true)
         viewModelScope.launch {
             val activeTokenId = userPrefs.getActiveTokenId()
+            val currentUserId = userPrefs.getUserId() ?: 0
             val body = CreateTournamentBody(
                 title = _ui.value.title.takeIf { it.isNotBlank() },
                 gameType = slug,
@@ -150,7 +151,7 @@ class StakeSetupViewModel(
                     )
                 },
             )
-            repo.create(body).fold(
+            repo.create(body, currentUserId).fold(
                 onSuccess = { dto ->
                     newTournamentState.reset()
                     _ui.value = _ui.value.copy(loading = false, createdTournamentId = dto.id)
