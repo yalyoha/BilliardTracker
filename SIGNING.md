@@ -15,34 +15,32 @@ keytool -genkeypair \
 
 **Храните keystore в надёжном месте** (внешний диск + облако). Если потеряете — вы больше не сможете выпускать обновления с тем же application id, придётся ставить как новое приложение.
 
-## Локально задать переменные окружения
+## Секреты
 
-Добавьте в `~/.zshrc` / `~/.bashrc` / PowerShell profile:
+Все секреты — в `BilliardTracker/.env` (gitignored), бэкап в `~/.keystores/billiardtracker.env`:
 
-```bash
-export BT_KEYSTORE_PATH=~/.keystores/billiardtracker.keystore
-export BT_KEY_ALIAS=billiardtracker
-export BT_STORE_PASSWORD='ваш пароль'
-export BT_KEY_PASSWORD='ваш пароль'
+```
+BT_KEYSTORE_PATH=C:/Users/LAV/.keystores/billiardtracker.keystore
+BT_KEY_ALIAS=billiardtracker
+BT_STORE_PASSWORD=…
+BT_KEY_PASSWORD=…
+GITHUB_TOKEN=ghp_…     # для GH release + удаления старых тегов
 ```
 
-Или создайте `keystore.properties` в корне проекта (файл gitignored):
+Release-скрипт (`E:/PROJECTS/LAV-Server/bin/.deploy/release-billiardtracker.mjs:38-47`) сам подтягивает `.env` в `process.env` — руками экспортировать ничего не нужно.
 
-```properties
-storeFile=/absolute/path/to/billiardtracker.keystore
-```
-
-И заполните пароли через env-переменные.
+Резервный путь: экспортировать `BT_*` в текущей сессии PowerShell / `~/.zshrc` — приоритет у уже установленных env-переменных над `.env`.
 
 ## Выпустить релиз
 
 ```bash
-node bin/.deploy/release-billiardtracker.mjs
+node E:/PROJECTS/LAV-Server/bin/.deploy/release-billiardtracker.mjs
 ```
 
-Скрипт:
-1. Читает `app/build.gradle.kts` → узнаёт `versionName` и `versionCode`.
-2. `./gradlew :app:assembleRelease` — собирает подписанный APK.
-3. Копирует APK на VPS в `/srv/billiardtracker/releases/v{versionName}/billiardtracker.apk`.
-4. Обновляет симлинк `/srv/billiardtracker/releases/latest → v{versionName}`.
-5. Генерит `/srv/billiardtracker/releases/v{versionName}/version.json` с метаданными.
+Шаги скрипта:
+1. Читает `versionName` + `versionCode` из `app/build.gradle.kts`.
+2. Догружает секреты из `BilliardTracker/.env`.
+3. `gradlew :app:assembleRelease` — подписанный APK (~6 МБ после R8 + shrink).
+4. SFTP → `/srv/billiardtracker/releases/v{versionName}/billiardtracker.apk` + `version.json` на VPS.
+5. Обновляет симлинк `/srv/billiardtracker/releases/latest → v{versionName}` (auto-updater смотрит именно `latest/version.json`).
+6. Если задан `GITHUB_TOKEN` — создаёт GH release `v{versionName}` с APK-asset'ом и **удаляет ВСЕ старые release'ы + git-теги** (на GH держим только последнюю версию; auto-updater юзеров ходит на VPS, GH — просто зеркало для последней сборки).

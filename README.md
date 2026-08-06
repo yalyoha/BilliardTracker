@@ -41,22 +41,20 @@ Android-приложение для учёта любительских турн
 
 ## Релиз
 
-Из репо `LAV-Server`:
+Все секреты (`BT_KEYSTORE_PATH`, `BT_KEY_*`, `GITHUB_TOKEN`) — в `BilliardTracker/.env` (gitignored, бэкап в `~/.keystores/billiardtracker.env`). Скрипт сам их подхватит:
 
-```powershell
-$env:BT_KEYSTORE_PATH="C:/Users/LAV/.keystores/billiardtracker.keystore"
-$env:BT_KEY_ALIAS="billiardtracker"
-$env:BT_STORE_PASSWORD="..."
-$env:BT_KEY_PASSWORD="..."
+```bash
 node E:/PROJECTS/LAV-Server/bin/.deploy/release-billiardtracker.mjs
 ```
 
-Скрипт:
+Что делает:
 1. Читает `versionCode`/`versionName` из `app/build.gradle.kts`.
-2. Запускает `gradlew :app:assembleRelease`.
-3. Загружает подписанный APK на VPS в `/srv/billiardtracker/releases/v{version}/billiardtracker.apk`.
-4. Генерит `version.json`, обновляет симлинк `latest`.
-5. Смартфоны юзеров получат алерт «Доступно обновление» через встроенный auto-updater (проверка на каждом `ON_RESUME`).
+2. `gradlew :app:assembleRelease` — подписанный APK.
+3. SFTP на VPS → `/srv/billiardtracker/releases/v{version}/billiardtracker.apk` + `version.json`, обновляет симлинк `latest`.
+4. Создаёт GH release `v{version}` c APK-asset'ом и удаляет ВСЕ старые release'ы + git-теги (на GH держим только последнюю — auto-updater юзеров ходит на VPS, GH — просто зеркало).
+5. Смартфоны получат алерт «Доступно обновление» через встроенный auto-updater (проверка на каждом `ON_RESUME`).
+
+Подробности подписи и `.env` — в [`SIGNING.md`](SIGNING.md).
 
 ## SemVer
 
