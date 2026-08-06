@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 // Совместимость с UI-слоем: TeamMember и Team остаются как domain-типы,
@@ -51,14 +52,26 @@ class TeamState(
         // Восстанавливаем сохранённый activeTeamId из prefs при старте.
         appScope.launch { _activeTeamId.value = userPrefs.getActiveTeamId() }
         // Реактивно на смену активного токена — перезагружаем команды с сервера.
+        // distinctUntilChanged критичен: DataStore.data эмитит на любой write,
+        // а .map не дедуплицирует. Без него — fire-and-forget setActiveTeamId
+        // из addTeam (первая команда) триггерит re-collect, repo.list уходит
+        // на сервер ДО того как sync успел запостить create_team, возвращает
+        // список без свежесозданной команды → _teams затирается → юзер видит
+        // "экран сбросился, команда не создана" (баг v1.19.2 на Xiaomi Redmi
+        // Note 14 Pro — быстрое устройство + быстрая сеть).
         appScope.launch {
-            userPrefs.activeTokenIdFlow.collect { tokenId ->
+            userPrefs.activeTokenIdFlow.distinctUntilChanged().collect { tokenId ->
                 if (tokenId == null) {
                     _teams.value = emptyList()
                     return@collect
                 }
                 val list = repo.list(tokenId).getOrElse { emptyList() }
-                _teams.value = list.map { it.toDomain() }
+                // Merge: сохраняем локальные unsynced команды (id < 0), которые
+                // сервер ещё не знает — иначе legit token-switch с pending sync
+                // тоже их потеряет. Пары local↔server резолвит teamIdRemaps.
+                val serverTeams = list.map { it.toDomain() }
+                val localUnsynced = _teams.value.filter { it.id < 0 }
+                _teams.value = serverTeams + localUnsynced
                 // Убедиться что active team существует в новом списке; иначе
                 // выбрать первый или сбросить.
                 val stored = _activeTeamId.value
@@ -174,10 +187,12 @@ class TeamState(
         }
     }
 
-    /** Force-refresh с сервера. */
+    /** Force-refresh с сервера. Merge с local unsynced (см. init.collect). */
     suspend fun refresh() {
         val tokenId = userPrefs.getActiveTokenId() ?: return
         val list = repo.list(tokenId).getOrElse { return }
-        _teams.value = list.map { it.toDomain() }
+        val serverTeams = list.map { it.toDomain() }
+        val localUnsynced = _teams.value.filter { it.id < 0 }
+        _teams.value = serverTeams + localUnsynced
     }
 }
