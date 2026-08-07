@@ -116,13 +116,27 @@ class AppContainer(context: Context) {
     val userPrefs: UserPrefs = UserPrefs.create(context.applicationContext)
     val updatePrefs: UpdatePrefs = UpdatePrefs.create(context.applicationContext)
 
+    val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    // DevLogger — lateinit-паттерн через provider, потому что ApiService нужен
+    // для отправки батчей, а сам ApiService строится с interceptor'ом который
+    // ссылается на DevLogger. Решаем через lambda-provider.
+    private var _devLogger: com.example.billiardtracker.data.telemetry.DevLogger? = null
+
     val retrofit = NetworkModule.provideRetrofit(
         baseUrl = "https://billiardtracker.alekseylosev.ru/",
         userPrefs = userPrefs,
+        devLoggerProvider = { _devLogger },
     )
     val apiService: ApiService = retrofit.create(ApiService::class.java)
 
-    val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    val devLogger: com.example.billiardtracker.data.telemetry.DevLogger =
+        com.example.billiardtracker.data.telemetry.DevLogger(
+            api = apiService,
+            prefs = userPrefs,
+            appScope = appScope,
+            enabled = com.example.billiardtracker.BuildConfig.ENABLE_DEV_LOG,
+        ).also { _devLogger = it }
 
     val syncManager: com.example.billiardtracker.data.sync.SyncManager =
         com.example.billiardtracker.data.sync.SyncManager(
@@ -137,10 +151,11 @@ class AppContainer(context: Context) {
             appScope = appScope,
             baseUrl = "https://billiardtracker.alekseylosev.ru/",
             tokenProvider = { userPrefs.getToken() },
+            devLoggerProvider = { _devLogger },
         )
 
     // ----- Repos (order matters: everything below uses infrastructure above) -----
-    val authRepository = AuthRepository(apiService, userPrefs)
+    val authRepository = AuthRepository(apiService, userPrefs, { _devLogger })
     val tournamentRepository = TournamentRepository(
         api = apiService,
         tournamentDao = tournamentDao,
@@ -179,7 +194,7 @@ class AppContainer(context: Context) {
     val newTournamentState = com.example.billiardtracker.ui.nav.NewTournamentState()
 
     val teamState: com.example.billiardtracker.ui.nav.TeamState =
-        com.example.billiardtracker.ui.nav.TeamState(userPrefs, teamRepository, appScope, syncManager)
+        com.example.billiardtracker.ui.nav.TeamState(userPrefs, teamRepository, appScope, syncManager, { _devLogger })
 
     val tokenSelfHealMutex: Mutex = Mutex()
 

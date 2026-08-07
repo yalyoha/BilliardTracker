@@ -13,6 +13,7 @@ import com.example.billiardtracker.data.local.entity.TeamEntity
 import com.example.billiardtracker.data.local.entity.TeamMemberEntity
 import com.example.billiardtracker.data.local.entity.TournamentEntity
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -45,7 +46,11 @@ class SyncManager(
     private val appScope: CoroutineScope,
     private val baseUrl: String,
     private val tokenProvider: suspend () -> String?,
+    private val devLoggerProvider: () -> com.example.billiardtracker.data.telemetry.DevLogger? = { null },
 ) {
+    private fun devlog(action: String, ok: Boolean? = null, httpCode: Int? = null, err: String? = null, payload: Map<String, Any?>? = null) {
+        devLoggerProvider()?.log(kind = "sync", action = action, ok = ok, httpCode = httpCode, err = err, payload = payload)
+    }
     private val http = OkHttpClient()
     private val syncMutex = Mutex()
 
@@ -57,8 +62,10 @@ class SyncManager(
     init {
         // Триггер: как только сеть появилась — драйним очередь. Ошибки
         // ловим на месте, чтобы uncaught exception в фоновом коррутине
-        // не убил app process.
-        appScope.launch {
+        // не убил app process. Dispatchers.IO — OkHttp.execute() блокирует,
+        // а appScope=Main → NetworkOnMainThreadException и sync никогда не
+        // проходил (юзер видит вечное ⏳). Найдено v1.20.0 dev-log'ом.
+        appScope.launch(Dispatchers.IO) {
             try {
                 networkMonitor.online.collect { online ->
                     if (online) runCatching { drain() }
@@ -69,21 +76,31 @@ class SyncManager(
 
     /** Force-drain — можно позвать из репо сразу после enqueue. */
     fun kickDrain() {
-        appScope.launch { runCatching { drain() } }
+        devlog("kickDrain")
+        appScope.launch(Dispatchers.IO) { runCatching { drain() } }
     }
 
     private suspend fun drain() {
-        if (!syncMutex.tryLock()) return
+        if (!syncMutex.tryLock()) {
+            devlog("drain-skip-locked")
+            return
+        }
         try {
-            val ops = try { outboxDao.pendingOps() } catch (_: Throwable) { return }
+            val ops = try { outboxDao.pendingOps() } catch (t: Throwable) {
+                devlog("drain-pendingOps-fail", ok = false, err = t.message)
+                return
+            }
+            devlog("drain-start", payload = mapOf("pending" to ops.size))
             // Проходим все ops. НЕ прерываемся при неудаче: могут быть
             // независимые ops дальше (напр. delete_shot для серверного shot).
-            // Deps резолвятся автоматически: parent op завершается первым по
-            // FIFO, чильд-op на след. drain'e увидит serverId.
             for (op in ops) {
-                try { executeOne(op) } catch (_: Throwable) { }
+                try { executeOne(op) } catch (t: Throwable) {
+                    devlog("op-exception", ok = false, err = t.message,
+                        payload = mapOf("kind" to op.kind, "opId" to op.opId))
+                }
             }
             runCatching { outboxDao.purgeExecuted() }
+            devlog("drain-end")
         } finally {
             syncMutex.unlock()
         }
@@ -108,7 +125,10 @@ class SyncManager(
             gid >= 0 -> gid
             else -> gameDao.getById(gid)?.serverId ?: return null
         }
-        val realTeamId = when {
+        // create_team не использует teamId в endpoint'е (POST /api/tokens/{tid}/teams)
+        // — не блокируем op пока serverId отсутствует, иначе gridlock: sync не
+        // запускает POST → serverId никогда не заполнится → ⏳ висит вечно.
+        val realTeamId = if (op.kind == "create_team") teamId else when {
             teamId == null -> null
             teamId >= 0 -> teamId
             else -> teamDao.getById(teamId)?.serverId ?: return null
@@ -139,12 +159,23 @@ class SyncManager(
     }
 
     private suspend fun executeOne(op: OutboxOpEntity): Boolean {
-        val jwt = tokenProvider() ?: return false
+        val jwt = tokenProvider()
+        if (jwt == null) {
+            devlog("op-no-jwt", ok = false, payload = mapOf("kind" to op.kind, "opId" to op.opId))
+            return false
+        }
         // Пересобираем endpoint с учётом того, что local IDs (отрицательные)
         // могли получить серверные serverId — подставляем их. Если зависимость
         // ещё не синкнута — пропускаем op, retry позже.
         val resolvedEndpoint = resolveEndpoint(op)
-            ?: return false // dep not ready, retry позже когда родитель синкнется
+        if (resolvedEndpoint == null) {
+            devlog("op-dep-not-ready", payload = mapOf(
+                "kind" to op.kind, "opId" to op.opId,
+                "localTeamId" to op.localTeamId, "localTournamentId" to op.localTournamentId,
+                "localGameId" to op.localGameId,
+            ))
+            return false
+        }
         return try {
             val url = baseUrl.trimEnd('/') + "/" + resolvedEndpoint.trimStart('/')
             val builder = Request.Builder().url(url).header("Authorization", "Bearer $jwt")
@@ -162,6 +193,9 @@ class SyncManager(
                     r.isSuccessful -> {
                         onSuccess(op, r.body?.string().orEmpty())
                         outboxDao.update(op.copy(executed = true))
+                        devlog("op-ok", ok = true, httpCode = r.code, payload = mapOf(
+                            "kind" to op.kind, "opId" to op.opId, "endpoint" to resolvedEndpoint,
+                        ))
                         true
                     }
                     r.code in 400..499 && r.code != 401 && r.code != 408 && r.code != 429 -> {
@@ -169,6 +203,9 @@ class SyncManager(
                         outboxDao.update(op.copy(
                             executed = true,
                             lastError = "HTTP ${r.code}: rejected",
+                        ))
+                        devlog("op-reject", ok = false, httpCode = r.code, payload = mapOf(
+                            "kind" to op.kind, "opId" to op.opId, "endpoint" to resolvedEndpoint,
                         ))
                         true
                     }
@@ -178,6 +215,9 @@ class SyncManager(
                             attempts = op.attempts + 1,
                             lastError = "HTTP ${r.code}",
                         ))
+                        devlog("op-retry", ok = false, httpCode = r.code, payload = mapOf(
+                            "kind" to op.kind, "opId" to op.opId, "attempts" to (op.attempts + 1),
+                        ))
                         false
                     }
                 }
@@ -185,8 +225,14 @@ class SyncManager(
         } catch (e: Exception) {
             outboxDao.update(op.copy(
                 attempts = op.attempts + 1,
-                lastError = e.message ?: "network error",
+                lastError = e.message ?: e.javaClass.simpleName,
             ))
+            devlog("op-network-fail", ok = false,
+                err = "${e.javaClass.simpleName}: ${e.message ?: "(no message)"}",
+                payload = mapOf(
+                    "kind" to op.kind, "opId" to op.opId, "attempts" to (op.attempts + 1),
+                    "endpoint" to resolvedEndpoint,
+                ))
             false
         }
     }
@@ -225,6 +271,7 @@ class SyncManager(
                 outboxDao.pendingOps()
                     .filter { it.localTeamId == localTeamId }
                     .forEach { outboxDao.update(it.copy(localTeamId = serverTeam.id)) }
+                devlog("team-remap", payload = mapOf("local" to localTeamId, "server" to serverTeam.id))
                 _teamIdRemaps.tryEmit(localTeamId to serverTeam.id)
             }
             "add_team_member" -> {

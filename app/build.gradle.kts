@@ -17,10 +17,15 @@ android {
         applicationId = "com.example.billiardtracker"
         minSdk = 28
         targetSdk = 36
-        versionCode = 74
-        versionName = "1.19.3"
+        versionCode = 75
+        versionName = "1.20.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Dev telemetry: собирать sync/repo/http/nav/lifecycle события и слать на
+        // /api/dev-log. Включено пока идёт активная разработка; после стабилизации
+        // выключить (или превратить в runtime-тумблер в Настройках).
+        buildConfigField("boolean", "ENABLE_DEV_LOG", "true")
     }
 
     signingConfigs {

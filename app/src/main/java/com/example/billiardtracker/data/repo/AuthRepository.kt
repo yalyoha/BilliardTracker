@@ -5,14 +5,21 @@ import com.example.billiardtracker.data.remote.ApiService
 import com.example.billiardtracker.data.remote.dto.RegisterBody
 import com.example.billiardtracker.data.remote.dto.RequestCodeBody
 import com.example.billiardtracker.data.remote.dto.VerifyBody
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
 class AuthRepository(
     private val api: ApiService,
     private val prefs: UserPrefs,
+    private val devLoggerProvider: () -> com.example.billiardtracker.data.telemetry.DevLogger? = { null },
 ) {
     val isAuthed: Flow<Boolean> = prefs.tokenFlow.map { !it.isNullOrEmpty() }
+
+    private fun devlog(action: String, ok: Boolean? = null, httpCode: Int? = null, err: String? = null, payload: Map<String, Any?>? = null) {
+        devLoggerProvider()?.log(kind = "auth", action = action, ok = ok, httpCode = httpCode, err = err, payload = payload)
+    }
 
     suspend fun requestCode(phone: String): Result<String?> = try {
         val res = api.requestCode(RequestCodeBody(phone))
@@ -65,26 +72,39 @@ class AuthRepository(
         name: String,
         pathName: String,
     ): Result<Unit> = try {
+        devlog("registerAndCreateFirstToken:in", payload = mapOf("phone" to phone, "name" to name))
         val regRes = api.register(RegisterBody(phone, name.trim()))
         if (!regRes.isSuccessful) {
+            devlog("register:fail", ok = false, httpCode = regRes.code())
             Result.failure(IllegalStateException("register failed: HTTP ${regRes.code()}"))
         } else {
             val regBody = regRes.body()!!
+            devlog("register:ok", ok = true, httpCode = regRes.code(), payload = mapOf("userId" to regBody.userId))
             val tokRes = api.createTokenWithAuth(
                 authorization = "Bearer ${regBody.token}",
                 body = com.example.billiardtracker.data.remote.dto.CreateTokenBody(name = pathName),
             )
             if (!tokRes.isSuccessful) {
+                devlog("createFirstToken:fail", ok = false, httpCode = tokRes.code())
                 Result.failure(IllegalStateException("token create failed: HTTP ${tokRes.code()}"))
             } else {
                 val created = tokRes.body()!!
-                prefs.setAuth(regBody.token, regBody.userId, phone)
-                prefs.setLocalProfile(phone, name.trim())
-                prefs.setActiveTokenId(created.id)
+                // NonCancellable: prefs.setAuth эмитит tokenFlow → isAuthed=true →
+                // nav-swap Onboarding→Main → rememberCoroutineScope в OnboardingScreen
+                // отменяется В СЕРЕДИНЕ 3-х suspend prefs writes, оставляя
+                // activeTokenId=null. Юзер потом не может создать команду
+                // (addTeam:no-token). Всё три write'а атомарно вне cancellation.
+                withContext(NonCancellable) {
+                    prefs.setAuth(regBody.token, regBody.userId, phone)
+                    prefs.setLocalProfile(phone, name.trim())
+                    prefs.setActiveTokenId(created.id)
+                }
+                devlog("createFirstToken:ok", ok = true, httpCode = tokRes.code(), payload = mapOf("tokenId" to created.id))
                 Result.success(Unit)
             }
         }
     } catch (e: Exception) {
+        devlog("registerAndCreateFirstToken:exception", ok = false, err = e.message)
         Result.failure(e)
     }
 

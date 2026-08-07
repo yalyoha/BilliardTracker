@@ -37,6 +37,8 @@ class MainActivity : ComponentActivity() {
 
         val container = (application as BilliardApp).container
 
+        container.devLogger.log(kind = "lifecycle", action = "onCreate",
+            payload = mapOf("versionName" to BuildConfig.VERSION_NAME, "versionCode" to BuildConfig.VERSION_CODE))
         handleDeepLink(intent, container)
 
         setContent {
@@ -48,6 +50,9 @@ class MainActivity : ComponentActivity() {
 
                 DisposableEffect(lifecycleOwner) {
                     val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_RESUME || event == Lifecycle.Event.ON_PAUSE) {
+                            container.devLogger.log(kind = "lifecycle", action = event.name)
+                        }
                         if (event == Lifecycle.Event.ON_RESUME) {
                             scope.launch {
                                 if (!container.updatePrefs.getAutoCheck()) return@launch

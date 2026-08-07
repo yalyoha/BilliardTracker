@@ -212,4 +212,10 @@ interface ApiService {
 
     @DELETE("api/tokens/{id}")
     suspend fun deleteToken(@Path("id") id: Long): Response<Unit>
+
+    // Dev telemetry — временный эндпоинт для отладки.
+    @POST("api/dev-log")
+    suspend fun sendDevLog(
+        @Body body: com.example.billiardtracker.data.remote.dto.DevLogBatchBody,
+    ): Response<Unit>
 }

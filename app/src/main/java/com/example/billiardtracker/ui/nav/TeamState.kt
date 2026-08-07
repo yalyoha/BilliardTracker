@@ -36,7 +36,11 @@ class TeamState(
     private val repo: TeamRepository,
     private val appScope: CoroutineScope,
     private val syncManager: SyncManager,
+    private val devLoggerProvider: () -> com.example.billiardtracker.data.telemetry.DevLogger? = { null },
 ) {
+    private fun devlog(action: String, ok: Boolean? = null, err: String? = null, payload: Map<String, Any?>? = null) {
+        devLoggerProvider()?.log(kind = "repo", screen = "TeamState", action = action, ok = ok, err = err, payload = payload)
+    }
     private val _teams = MutableStateFlow<List<Team>>(emptyList())
     val teams: StateFlow<List<Team>> = _teams.asStateFlow()
 
@@ -116,30 +120,38 @@ class TeamState(
         }.orEmpty()
 
     suspend fun addTeam(name: String): Result<Team> {
-        val tokenId = userPrefs.getActiveTokenId() ?: return Result.failure(IllegalStateException("no active token"))
+        devlog("addTeam:in", payload = mapOf("name" to name))
+        val tokenId = userPrefs.getActiveTokenId()
+        if (tokenId == null) {
+            devlog("addTeam:no-token", ok = false)
+            return Result.failure(IllegalStateException("no active token"))
+        }
         return repo.create(tokenId, name).map { dto ->
             val team = dto.toDomain()
             _teams.value = _teams.value + team
-            if (_activeTeamId.value == null) {
+            val wasFirst = _activeTeamId.value == null
+            if (wasFirst) {
                 _activeTeamId.value = team.id
-                // Fire-and-forget: suspend внутри .map даёт sync-корутине шанс
-                // отработать до того, как VM успеет установить expandedTeamId
-                // на возвращённый local id → id-remap эмитится с _draft.expandedTeamId==null,
-                // не мэтчится, и после fold мы остаёмся со stale local id.
                 appScope.launch { userPrefs.setActiveTeamId(team.id) }
             }
+            devlog("addTeam:ok", ok = true, payload = mapOf(
+                "localId" to team.id, "wasFirst" to wasFirst, "teamsCount" to _teams.value.size,
+            ))
             team
-        }
+        }.also { r -> if (r.isFailure) devlog("addTeam:fail", ok = false, err = r.exceptionOrNull()?.message) }
     }
 
     suspend fun renameTeam(id: Long, name: String): Result<Unit> {
+        devlog("renameTeam:in", payload = mapOf("id" to id, "name" to name))
         val tokenId = userPrefs.getActiveTokenId() ?: return Result.failure(IllegalStateException("no active token"))
         return repo.rename(tokenId, id, name).map { dto ->
             _teams.value = _teams.value.map { if (it.id == id) it.copy(name = dto.name) else it }
-        }
+            devlog("renameTeam:ok", ok = true, payload = mapOf("id" to id))
+        }.also { r -> if (r.isFailure) devlog("renameTeam:fail", ok = false, err = r.exceptionOrNull()?.message) }
     }
 
     suspend fun deleteTeam(id: Long): Result<Unit> {
+        devlog("deleteTeam:in", payload = mapOf("id" to id))
         val tokenId = userPrefs.getActiveTokenId() ?: return Result.failure(IllegalStateException("no active token"))
         return repo.delete(tokenId, id).map {
             _teams.value = _teams.value.filterNot { it.id == id }
@@ -148,7 +160,8 @@ class TeamState(
                 _activeTeamId.value = next
                 userPrefs.setActiveTeamId(next)
             }
-        }
+            devlog("deleteTeam:ok", ok = true, payload = mapOf("id" to id, "teamsCount" to _teams.value.size))
+        }.also { r -> if (r.isFailure) devlog("deleteTeam:fail", ok = false, err = r.exceptionOrNull()?.message) }
     }
 
     fun setActiveTeam(id: Long) {
@@ -161,12 +174,14 @@ class TeamState(
      * UI мог его удалить позже.
      */
     suspend fun addPlayer(teamId: Long, name: String, phone: String?): Result<Unit> {
+        devlog("addPlayer:in", payload = mapOf("teamId" to teamId, "name" to name, "hasPhone" to (phone != null)))
         val tokenId = userPrefs.getActiveTokenId() ?: return Result.failure(IllegalStateException("no active token"))
         return repo.addMember(tokenId, teamId, name, phone).map { dto ->
             val member = TeamMember(dto.displayName, dto.phone)
             _teams.value = _teams.value.map {
                 if (it.id == teamId) it.copy(players = it.players + member) else it
             }
+            devlog("addPlayer:ok", ok = true, payload = mapOf("teamId" to teamId))
             // Сохраняем full team refresh чтобы member.id был доступен в кеше
             // (для удаления через removePlayerAt мы используем индекс + свежий
             // серверный список, см. removePlayerAt).
