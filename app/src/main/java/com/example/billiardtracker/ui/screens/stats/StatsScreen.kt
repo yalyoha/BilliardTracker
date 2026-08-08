@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -18,18 +20,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.billiardtracker.domain.rules.GameType
 import com.example.billiardtracker.ui.components.BilliardTopBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StatsScreen(viewModel: StatsViewModel) {
+fun StatsScreen(
+    viewModel: StatsViewModel,
+    onOpenPayout: (Long) -> Unit,
+) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val finished by viewModel.finishedTournaments.collectAsStateWithLifecycle()
 
     Scaffold(topBar = { BilliardTopBar(title = { Text("Статистика") }) }) { padding ->
         Column(
             Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -58,6 +66,32 @@ fun StatsScreen(viewModel: StatsViewModel) {
                     Text("Счёт", style = MaterialTheme.typography.titleSmall)
                     StatRow("Всего забито шаров", "${s.score.totalBalls}")
                     StatRow("В среднем за партию", "%.1f".format(s.score.avgPerGame))
+                }
+            }
+
+            if (finished.isNotEmpty()) {
+                Text(
+                    "Сыгранные встречи",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                finished.forEach { t ->
+                    Card(
+                        onClick = { onOpenPayout(t.id) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(
+                                t.title ?: "Без названия",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                displayGameType(t.gameType),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -92,3 +126,6 @@ private fun StatRow(label: String, value: String) {
         )
     }
 }
+
+private fun displayGameType(slug: String): String =
+    GameType.entries.firstOrNull { it.ruleFileSlug == slug }?.displayName ?: slug
