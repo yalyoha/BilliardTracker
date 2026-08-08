@@ -65,6 +65,7 @@ fun SettingsScreen(
     val autoCheck by viewModel.autoCheck.collectAsStateWithLifecycle()
     val tokensState by viewModel.tokens.collectAsStateWithLifecycle()
     val activeTokenId by viewModel.activeTokenId.collectAsStateWithLifecycle()
+    val enabledSlugs by viewModel.enabledGameSlugs.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var showUpdateDialog by remember { mutableStateOf(false) }
@@ -126,6 +127,32 @@ fun SettingsScreen(
                         onClick = onOpenRules,
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text("Правила игр") }
+                }
+            }
+
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Дисциплины на главном", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Отметь только те игры, которые показывать на главном экране при выборе встречи. Полный справочник всегда доступен в «Правилах игр».",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    com.example.billiardtracker.domain.rules.GameType.entries.forEach { gt ->
+                        val checked = gt.ruleFileSlug in enabledSlugs
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(gt.displayName, modifier = Modifier.weight(1f))
+                            Switch(
+                                checked = checked,
+                                onCheckedChange = { viewModel.toggleGameSlug(gt.ruleFileSlug, it) },
+                                enabled = !(checked && enabledSlugs.size == 1),
+                            )
+                        }
+                    }
                 }
             }
 

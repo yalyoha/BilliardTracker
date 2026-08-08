@@ -57,8 +57,20 @@ class SettingsViewModel(
     val activeTokenId: StateFlow<Long?> = userPrefs.activeTokenIdFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    val enabledGameSlugs: StateFlow<Set<String>> = userPrefs.enabledGameSlugsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), UserPrefs.ALL_SLUGS)
+
     fun setActiveToken(id: Long) {
         viewModelScope.launch { userPrefs.setActiveTokenId(id) }
+    }
+
+    fun toggleGameSlug(slug: String, enabled: Boolean) {
+        viewModelScope.launch {
+            val cur = enabledGameSlugs.value
+            val next = if (enabled) cur + slug else cur - slug
+            // Держим хотя бы одну включённую — иначе на Home пустой picker.
+            if (next.isNotEmpty()) userPrefs.setEnabledGameSlugs(next)
+        }
     }
 
     private val _tokens = MutableStateFlow(TokensUiState())
