@@ -52,7 +52,7 @@ fun RefereePanel(
         Modifier.fillMaxWidth().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Участники турнира", style = MaterialTheme.typography.titleSmall)
+        Text("Участники встречи", style = MaterialTheme.typography.titleSmall)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             participants.forEach { p ->
                 val isActive = p.id == selectedPid

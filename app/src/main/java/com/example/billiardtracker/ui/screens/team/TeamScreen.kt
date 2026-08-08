@@ -72,7 +72,7 @@ fun TeamScreen(viewModel: TeamViewModel) {
         }
     }
 
-    Scaffold(topBar = { BilliardTopBar(title = { Text("Команды") }) }) { padding ->
+    Scaffold(topBar = { BilliardTopBar(title = { Text("Составы") }) }) { padding ->
         Column(
             Modifier
                 .padding(padding)
@@ -82,13 +82,13 @@ fun TeamScreen(viewModel: TeamViewModel) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                "Готовые составы для быстрого старта турниров.",
+                "Готовые составы для быстрого старта встреч.",
                 style = MaterialTheme.typography.bodySmall,
             )
 
             if (ui.teams.isEmpty()) {
                 Text(
-                    "Ещё нет команд. Создай первую.",
+                    "Ещё нет составов. Создай первый.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
@@ -118,13 +118,13 @@ fun TeamScreen(viewModel: TeamViewModel) {
             Button(
                 onClick = { showCreateDialog = true },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Создать команду") }
+            ) { Text("Создать состав") }
         }
     }
 
     if (showCreateDialog) {
         NameTeamDialog(
-            title = "Новая команда",
+            title = "Новый состав",
             initial = "",
             onDismiss = { showCreateDialog = false },
             onSave = { name ->
@@ -135,7 +135,7 @@ fun TeamScreen(viewModel: TeamViewModel) {
     }
     teamToRename?.let { t ->
         NameTeamDialog(
-            title = "Переименовать команду",
+            title = "Переименовать состав",
             initial = t.name,
             onDismiss = { teamToRename = null },
             onSave = { name ->
@@ -147,8 +147,8 @@ fun TeamScreen(viewModel: TeamViewModel) {
     teamToDelete?.let { t ->
         AlertDialog(
             onDismissRequest = { teamToDelete = null },
-            title = { Text("Удалить команду?") },
-            text = { Text("Удалить \"${t.name}\" и всех её игроков?") },
+            title = { Text("Удалить состав?") },
+            text = { Text("Удалить \"${t.name}\" и всех его игроков?") },
             confirmButton = {
                 Button(
                     onClick = { viewModel.deleteTeam(t.id); teamToDelete = null },
@@ -225,7 +225,7 @@ private fun TeamCard(
                 TextButton(
                     onClick = onRename,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Переименовать команду") }
+                ) { Text("Переименовать состав") }
 
                 team.players.forEachIndexed { i, p ->
                     Row(
@@ -293,7 +293,7 @@ private fun TeamCard(
                 Button(
                     onClick = onCollapse,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Сохранить команду") }
+                ) { Text("Сохранить состав") }
             }
         }
     }

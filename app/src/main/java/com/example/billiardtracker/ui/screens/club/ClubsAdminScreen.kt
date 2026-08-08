@@ -49,7 +49,7 @@ fun ClubsAdminScreen(
     Scaffold(
         topBar = {
             BilliardTopBar(
-                title = { Text("Клубы / Бары") },
+                title = { Text("Бильярдные") },
                 navigationIcon = { TextButton(onClick = onBack) { Text("Назад") } },
             )
         },
@@ -63,7 +63,7 @@ fun ClubsAdminScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                "Общий список для всех пользователей. Название бара используется в автоматическом заголовке турнира.",
+                "Общий список для всех пользователей. Название бильярдной используется в автоматическом заголовке встречи.",
                 style = MaterialTheme.typography.bodySmall,
             )
 
@@ -106,7 +106,7 @@ fun ClubsAdminScreen(
             }
 
             Button(onClick = onAddClub, modifier = Modifier.fillMaxWidth()) {
-                Text("Добавить клуб (по геолокации)")
+                Text("Добавить бильярдную (по геолокации)")
             }
         }
     }
@@ -124,7 +124,7 @@ fun ClubsAdminScreen(
     toDelete?.let { c ->
         AlertDialog(
             onDismissRequest = { toDelete = null },
-            title = { Text("Удалить клуб?") },
+            title = { Text("Удалить бильярдную?") },
             text = { Text("Удалить \"${c.name}\" из общего списка? Отменить нельзя.") },
             confirmButton = {
                 Button(
@@ -155,7 +155,7 @@ private fun EditClubDialog(
     var address by remember { mutableStateOf(initial.address.orEmpty()) }
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Редактировать клуб") },
+        title = { Text("Редактировать бильярдную") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(

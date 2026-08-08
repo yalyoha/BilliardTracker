@@ -76,7 +76,7 @@ fun TournamentScreen(
     Scaffold(
         topBar = {
             com.example.billiardtracker.ui.components.BilliardTopBar(
-                title = { Text(ui.tournament?.title ?: "Турнир") },
+                title = { Text(ui.tournament?.title ?: "Встреча") },
                 navigationIcon = { TextButton(onClick = onBack) { Text("Назад") } },
                 actions = {
                     // Только не-маркёр видит "Стать маркёром" — любой участник
@@ -138,7 +138,7 @@ fun TournamentScreen(
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
                             .fillMaxWidth(),
-                    ) { Text("Закрыть турнир") }
+                    ) { Text("Закрыть встречу") }
                 } else if (t.status == "finished") {
                     Button(
                         onClick = onOpenPayout,

@@ -52,7 +52,7 @@ fun StatsScreen(
                 )
             } else {
                 StatCard {
-                    StatRow("Турниров всего", "${s.tournaments.total}")
+                    StatRow("Встреч всего", "${s.tournaments.total}")
                     StatRow("Активных", "${s.tournaments.active}")
                     StatRow("Завершённых", "${s.tournaments.finished}")
                 }

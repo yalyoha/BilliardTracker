@@ -85,7 +85,7 @@ private data class NavTab(val route: String, val label: String, val icon: ImageV
 
 private val TABS = listOf(
     NavTab(Route.Game.path, "Игра", Icons.Filled.EmojiEvents),
-    NavTab(Route.Team.path, "Команды", Icons.Filled.Groups),
+    NavTab(Route.Team.path, "Составы", Icons.Filled.Groups),
     NavTab(Route.Profile.path, "Профиль", Icons.Filled.Person),
     NavTab(Route.Stats.path, "Статистика", Icons.Filled.QueryStats),
     NavTab(Route.Settings.path, "Настройки", Icons.Filled.Settings),

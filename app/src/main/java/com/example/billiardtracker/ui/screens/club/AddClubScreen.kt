@@ -53,7 +53,7 @@ fun AddClubScreen(
     Scaffold(
         topBar = {
             BilliardTopBar(
-                title = { Text("Добавить клуб") },
+                title = { Text("Добавить бильярдную") },
                 navigationIcon = { TextButton(onClick = onBack) { Text("Назад") } },
                 actions = {
                     Button(onClick = viewModel::submit, enabled = !ui.loading) {

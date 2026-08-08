@@ -46,7 +46,7 @@ fun StakeSetupScreen(
 
     Scaffold(
         topBar = { BilliardTopBar(
-            title = { Text("Турнир") },
+            title = { Text("Встреча") },
             navigationIcon = { TextButton(onClick = onBack) { Text("Назад") } },
             actions = {
                 Button(onClick = viewModel::submit, enabled = !ui.loading) {
@@ -145,7 +145,7 @@ private fun ClubPickerDropdown(
             value = "Выбрать другую бильярдную",
             onValueChange = {},
             readOnly = true,
-            label = { Text("Ближайшие бары (${clubs.size})") },
+            label = { Text("Ближайшие бильярдные (${clubs.size})") },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .fillMaxWidth()

@@ -70,7 +70,7 @@ fun PayoutScreen(
     Scaffold(
         topBar = {
             BilliardTopBar(
-                title = { Text("Итоги турнира") },
+                title = { Text("Итоги встречи") },
                 actions = {
                     IconButton(onClick = onClose) {
                         Icon(Icons.Filled.Close, contentDescription = "Закрыть")
@@ -126,7 +126,7 @@ fun PayoutScreen(
                 )
                 val wins = championPid?.let { winsByPid[it] } ?: 0
                 Text(
-                    "$wins побед в турнире",
+                    "$wins побед во встрече",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimary,
                 )

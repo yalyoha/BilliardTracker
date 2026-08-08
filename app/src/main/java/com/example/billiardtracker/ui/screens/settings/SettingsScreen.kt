@@ -158,15 +158,15 @@ fun SettingsScreen(
 
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Клубы / Бары", style = MaterialTheme.typography.titleMedium)
+                    Text("Бильярдные", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Общий список заведений. Название клуба используется в автоматическом заголовке нового турнира.",
+                        "Общий список заведений. Название бильярдной используется в автоматическом заголовке новой встречи.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Button(
                         onClick = onOpenClubs,
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Управлять клубами") }
+                    ) { Text("Управлять бильярдными") }
                 }
             }
 
@@ -187,7 +187,7 @@ fun SettingsScreen(
                     val url = "$SHARE_BASE/$token"
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, "Смотри мои бильярдные турниры: $url")
+                        putExtra(Intent.EXTRA_TEXT, "Смотри мои встречи в бильярдной: $url")
                     }
                     ctx.startActivity(Intent.createChooser(intent, "Отправить"))
                 },
@@ -294,7 +294,7 @@ private fun MasterTokensCard(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Пути мастера", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Ссылка с токеном для тебя и друзей, для сохранения и отслеживания турниров.",
+                "Ссылка с токеном для тебя и друзей, для сохранения и отслеживания встреч.",
                 style = MaterialTheme.typography.bodySmall,
             )
 
@@ -347,7 +347,7 @@ private fun TokenRow(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         val name = token.name?.takeIf { it.isNotBlank() } ?: "Без названия"
-        val subtitle = "${token.tournamentCount} ${pluralTurniry(token.tournamentCount)}"
+        val subtitle = "${token.tournamentCount} ${pluralVstrech(token.tournamentCount)}"
         val isOwner = token.role != "subscriber"
         if (isActive) {
             Button(
@@ -458,14 +458,14 @@ private fun RenameTokenDialog(
     )
 }
 
-private fun pluralTurniry(n: Int): String {
+private fun pluralVstrech(n: Int): String {
     val mod100 = n % 100
     val mod10 = n % 10
     return when {
-        mod100 in 11..14 -> "турниров"
-        mod10 == 1 -> "турнир"
-        mod10 in 2..4 -> "турнира"
-        else -> "турниров"
+        mod100 in 11..14 -> "встреч"
+        mod10 == 1 -> "встреча"
+        mod10 in 2..4 -> "встречи"
+        else -> "встреч"
     }
 }
 
@@ -516,7 +516,7 @@ private fun DeleteTokenDialog(
         text = {
             Text(
                 "⚠️ Удалить путь \"$label\"? Все ${token.tournamentCount} " +
-                    "${pluralTurniry(token.tournamentCount)} и статистика по ним будут стёрты навсегда.",
+                    "${pluralVstrech(token.tournamentCount)} и статистика по ним будут стёрты навсегда.",
             )
         },
         confirmButton = {

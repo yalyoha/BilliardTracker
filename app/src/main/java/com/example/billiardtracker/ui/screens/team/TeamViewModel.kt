@@ -108,7 +108,7 @@ class TeamViewModel(
                                    else teams.lastOrNull()?.id ?: team.id
                     _draft.value = _draft.value.copy(expandedTeamId = actualId)
                 },
-                onFailure = { e -> _draft.value = _draft.value.copy(error = e.message ?: "Не удалось создать команду") },
+                onFailure = { e -> _draft.value = _draft.value.copy(error = e.message ?: "Не удалось создать состав") },
             )
         }
     }
