@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -21,6 +22,9 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
     val activeTokenIdFlow: Flow<Long?> = dataStore.data.map { it[ACTIVE_TOKEN_ID] }
     val activeTeamIdFlow: Flow<Long?> = dataStore.data.map { it[ACTIVE_TEAM_ID] }
     val pendingSharedTokenFlow: Flow<String?> = dataStore.data.map { it[PENDING_SHARED_TOKEN] }
+    val enabledGameSlugsFlow: Flow<Set<String>> = dataStore.data.map {
+        it[ENABLED_GAME_SLUGS] ?: ALL_SLUGS
+    }
 
     suspend fun getToken(): String? = tokenFlow.first()
     suspend fun getUserId(): Long? = userIdFlow.first()
@@ -33,6 +37,13 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
     suspend fun setActiveTeamId(id: Long?) {
         dataStore.edit {
             if (id == null) it.remove(ACTIVE_TEAM_ID) else it[ACTIVE_TEAM_ID] = id
+        }
+    }
+
+    suspend fun setEnabledGameSlugs(slugs: Set<String>) {
+        dataStore.edit {
+            if (slugs == ALL_SLUGS) it.remove(ENABLED_GAME_SLUGS)
+            else it[ENABLED_GAME_SLUGS] = slugs
         }
     }
 
@@ -69,6 +80,15 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
     }
 
     companion object {
+        // Держим здесь (без импорта GameType), чтобы data-слой не зависел от domain.
+        // Синхронизируй со списком GameType.entries.map { it.ruleFileSlug }.
+        val ALL_SLUGS: Set<String> = setOf(
+            "svobodnaya-piramida", "kombinirovannaya-piramida", "dinamichnaya-piramida",
+            "klassicheskaya-piramida", "svobodnaya-s-prodolzheniem", "malaya-russkaya-partiya",
+            "bolshaya-russkaya-partiya", "alagyor", "yaroslavskaya-piramida", "kolkhoz",
+            "fishki", "odin-karman", "grosh", "evropeyskaya-piramida",
+        )
+
         private val TOKEN = stringPreferencesKey("token")
         private val USER_ID = longPreferencesKey("user_id")
         private val PHONE = stringPreferencesKey("phone")
@@ -76,6 +96,7 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
         private val ACTIVE_TOKEN_ID = longPreferencesKey("active_token_id")
         private val ACTIVE_TEAM_ID = longPreferencesKey("active_team_id")
         private val PENDING_SHARED_TOKEN = stringPreferencesKey("pending_shared_token")
+        private val ENABLED_GAME_SLUGS = stringSetPreferencesKey("enabled_game_slugs")
 
         fun create(context: Context): UserPrefs = UserPrefs(context.userDataStore)
     }
