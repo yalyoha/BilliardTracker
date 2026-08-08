@@ -1,6 +1,5 @@
 package com.example.billiardtracker.ui.nav
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
@@ -26,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -129,7 +127,6 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
 
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
-    val ctx = LocalContext.current
 
     val gameFlowRoutes = setOf(
         Route.PickGameType.path,
@@ -189,35 +186,28 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                 modifier = Modifier.fillMaxSize(),
             ) {
             composable(Route.Game.path) {
-                val vm = HomeViewModel(container.tournamentRepository, container.userPrefs)
+                val vm = HomeViewModel(container.tournamentRepository, container.userPrefs, container.teamState)
                 HomeScreen(
                     viewModel = vm,
-                    onNewTournament = {
+                    onPickGameType = { gt ->
                         val teamState = container.teamState
                         val activeId = teamState.activeTeamId.value
-                        val activeTeam = teamState.teamById(activeId)
-                        if (activeTeam == null || activeTeam.players.isEmpty()) {
-                            Toast.makeText(
-                                ctx,
-                                if (activeTeam == null) "Сначала создай команду во вкладке Команды"
-                                else "Добавь в команду игроков",
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                            nav.navigate(Route.Team.path) {
-                                popUpTo(Route.Game.path) { saveState = true; inclusive = false }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        } else {
-                            container.newTournamentState.participants.value =
-                                teamState.asParticipantBodies(activeTeam.id)
-                            nav.navigate(Route.PickGameType.path)
+                        val active = teamState.teamById(activeId)
+                            ?: teamState.teams.value.firstOrNull()
+                        if (active == null || active.players.isEmpty()) return@HomeScreen
+                        container.newTournamentState.gameType.value = gt.ruleFileSlug
+                        container.newTournamentState.participants.value =
+                            teamState.asParticipantBodies(active.id)
+                        nav.navigate(Route.StakeSetup.path)
+                    },
+                    onAddTeam = {
+                        nav.navigate(Route.Team.path) {
+                            popUpTo(Route.Game.path) { saveState = true; inclusive = false }
+                            launchSingleTop = true
+                            restoreState = true
                         }
                     },
                     onOpenTournament = { id -> nav.navigate(Route.Tournament.build(id)) },
-                    onOpenPayout = { id -> nav.navigate(Route.Payout.build(id)) },
-                    onOpenSettings = { nav.navigate(Route.Settings.path) },
-                    onAddClub = { nav.navigate(Route.AddClub.path) },
                 )
             }
             composable(Route.Team.path) {

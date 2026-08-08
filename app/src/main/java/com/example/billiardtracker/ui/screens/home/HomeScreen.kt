@@ -10,84 +10,82 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.billiardtracker.data.local.entity.TournamentEntity
+import com.example.billiardtracker.domain.rules.GameType
 import com.example.billiardtracker.ui.components.BilliardTopBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
-    onNewTournament: () -> Unit,
+    onPickGameType: (GameType) -> Unit,
+    onAddTeam: () -> Unit,
     onOpenTournament: (Long) -> Unit,
-    onOpenPayout: (Long) -> Unit,
-    onOpenSettings: () -> Unit,
-    onAddClub: () -> Unit,
 ) {
-    val list by viewModel.tournaments.collectAsStateWithLifecycle()
+    val enabled by viewModel.enabledGameSlugs.collectAsStateWithLifecycle()
+    val hasTeam by viewModel.hasReadyTeam.collectAsStateWithLifecycle()
+    val active by viewModel.activeTournaments.collectAsStateWithLifecycle()
 
     Scaffold(
-        topBar = {
-            BilliardTopBar(
-                title = { Text("Мои турниры") },
-            )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onNewTournament,
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("Новый турнир") },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            )
-        },
+        topBar = { BilliardTopBar(title = { Text("Новая встреча") }) },
     ) { padding ->
-        if (list.isEmpty()) {
-            Column(
-                Modifier
-                    .padding(padding)
-                    .fillMaxSize()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text("Пока ни одного турнира", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Нажми «Новый турнир», чтобы начать",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+        LazyColumn(
+            Modifier.padding(padding).fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (!hasTeam) {
+                item {
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                "Чтобы начать встречу — нужен состав.",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Button(onClick = onAddTeam, modifier = Modifier.fillMaxWidth()) {
+                                Text("Добавить состав")
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
             }
-        } else {
-            LazyColumn(
-                Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(list, key = { it.id }) { t ->
-                    TournamentCard(
-                        t,
-                        onClick = { onOpenTournament(t.id) },
-                        onOpenPayout = { onOpenPayout(t.id) },
+
+            val enabledTypes = GameType.entries.filter { it.ruleFileSlug in enabled }
+            items(enabledTypes, key = { it.name }) { gt ->
+                Button(
+                    onClick = { onPickGameType(gt) },
+                    enabled = hasTeam,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(gt.displayName) }
+            }
+
+            if (active.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    HorizontalDivider()
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Идут сейчас",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
                     )
+                }
+                items(active, key = { it.id }) { t ->
+                    ActiveTournamentCard(t, onClick = { onOpenTournament(t.id) })
                 }
             }
         }
@@ -96,55 +94,18 @@ fun HomeScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TournamentCard(
-    t: TournamentEntity,
-    onClick: () -> Unit,
-    onOpenPayout: () -> Unit,
-) {
+private fun ActiveTournamentCard(t: TournamentEntity, onClick: () -> Unit) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            androidx.compose.foundation.layout.Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = androidx.compose.ui.Alignment.Top,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        t.title ?: "Без названия",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(displayGameType(t.gameType), style = MaterialTheme.typography.bodySmall)
-                }
-                AssistChip(
-                    onClick = {},
-                    label = { Text(if (t.status == "active") "Идёт" else "Закончен") },
-                )
-            }
-            if (t.status != "active") {
-                Spacer(Modifier.height(8.dp))
-                androidx.compose.material3.OutlinedButton(
-                    onClick = onOpenPayout,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Итоги") }
-            }
+            Text(
+                t.title ?: "Без названия",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(displayGameType(t.gameType), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
 
-private fun displayGameType(slug: String): String = when (slug) {
-    "svobodnaya-piramida" -> "Свободная пирамида"
-    "kombinirovannaya-piramida" -> "Комбинированная"
-    "dinamichnaya-piramida" -> "Динамичная"
-    "klassicheskaya-piramida" -> "Классическая (71 очко)"
-    "svobodnaya-s-prodolzheniem" -> "Свободная с продолжением"
-    "malaya-russkaya-partiya" -> "Малая русская партия"
-    "bolshaya-russkaya-partiya" -> "Большая русская партия"
-    "alagyor" -> "Алагёр"
-    "yaroslavskaya-piramida" -> "Ярославская"
-    "kolkhoz" -> "Колхоз"
-    "fishki" -> "Фишки"
-    "odin-karman" -> "Один карман"
-    "grosh" -> "Грош"
-    "evropeyskaya-piramida" -> "Европейская пирамида"
-    else -> slug
-}
+private fun displayGameType(slug: String): String =
+    GameType.entries.firstOrNull { it.ruleFileSlug == slug }?.displayName ?: slug
