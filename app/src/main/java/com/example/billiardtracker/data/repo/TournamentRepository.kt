@@ -61,19 +61,23 @@ class TournamentRepository(
      * возвращаем DTO из Room. Позволяет открыть турнир offline.
      */
     suspend fun fetchDetail(id: Long): Result<TournamentDto> {
+        // Если local id уже смапился на server (create_tournament синкнулся) —
+        // сразу берём server id, иначе fromRoom вернёт not_found (сущность
+        // была delete+re-inserted с server id).
+        val resolved = if (id < 0) syncManager?.resolveTournamentId(id) ?: id else id
         // Для локального id (< 0) API запрос бессмыслен — сразу Room.
-        if (id < 0) return fromRoom(id)
+        if (resolved < 0) return fromRoom(resolved)
         return try {
-            val res = api.getTournament(id)
+            val res = api.getTournament(resolved)
             if (res.isSuccessful) {
                 val dto = res.body()!!
                 cacheDetail(dto)
                 Result.success(dto)
             } else {
-                fromRoom(id)
+                fromRoom(resolved)
             }
         } catch (e: Exception) {
-            fromRoom(id)
+            fromRoom(resolved)
         }
     }
 

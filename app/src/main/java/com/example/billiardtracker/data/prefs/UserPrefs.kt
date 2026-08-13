@@ -79,6 +79,19 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { it.clear() }
     }
 
+    /**
+     * Persistent id remap для sync outbox. Формат: "kind:localId:serverId,..."
+     * (kind ∈ tournament|game). Нужен чтобы пережить kill приложения между
+     * успехом create_tournament и enqueue дочернего start_game с уже
+     * протухшим local tid, когда tournament entity в DAO уже удалён.
+     */
+    suspend fun getIdRemap(): String? = dataStore.data.map { it[ID_REMAP] }.first()
+    suspend fun setIdRemap(value: String?) {
+        dataStore.edit {
+            if (value.isNullOrEmpty()) it.remove(ID_REMAP) else it[ID_REMAP] = value
+        }
+    }
+
     companion object {
         // Держим здесь (без импорта GameType), чтобы data-слой не зависел от domain.
         // Синхронизируй со списком GameType.entries.map { it.ruleFileSlug }.
@@ -97,6 +110,7 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
         private val ACTIVE_TEAM_ID = longPreferencesKey("active_team_id")
         private val PENDING_SHARED_TOKEN = stringPreferencesKey("pending_shared_token")
         private val ENABLED_GAME_SLUGS = stringSetPreferencesKey("enabled_game_slugs")
+        private val ID_REMAP = stringPreferencesKey("id_remap")
 
         fun create(context: Context): UserPrefs = UserPrefs(context.userDataStore)
     }

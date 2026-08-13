@@ -38,12 +38,18 @@ class GameRepository(
      */
     suspend fun listGames(tid: Long): Result<List<GameDto>> {
         val games = gameDao
-        if (tid < 0) {
+        // tid из VM — локальный negative до первого refresh, но после
+        // create_tournament-remap все Room-игры уже под серверным tid. Без
+        // резолва listGames уходит в оффлайн-ветку и readGamesFromRoom(NEG)
+        // возвращает пусто → refresh() не видит игр → currentGame залипает
+        // на устаревшей local negative версии.
+        val resolvedTid = syncManager?.resolveTournamentId(tid) ?: tid
+        if (resolvedTid < 0) {
             // Локальный турнир — сервер о нём не знает, только Room.
-            return Result.success(readGamesFromRoom(tid))
+            return Result.success(readGamesFromRoom(resolvedTid))
         }
         return try {
-            val r = api.listGames(tid)
+            val r = api.listGames(resolvedTid)
             if (r.isSuccessful) {
                 val list = r.body()!!.games
                 // Upsert в Room чтобы offline потом мог прочитать.
@@ -64,9 +70,9 @@ class GameRepository(
                     })
                 }
                 Result.success(list)
-            } else Result.success(readGamesFromRoom(tid))
+            } else Result.success(readGamesFromRoom(resolvedTid))
         } catch (e: Exception) {
-            Result.success(readGamesFromRoom(tid))
+            Result.success(readGamesFromRoom(resolvedTid))
         }
     }
 
@@ -160,8 +166,14 @@ class GameRepository(
         }
         val now = System.currentTimeMillis()
         val body = FinishGameBody(winnerPid)
+        // gid из VM — локальный negative до первого refresh с сервера, но Room
+        // после start_game-remap хранит игру уже под серверным id. Без резолва
+        // getById(gid) промахивается → local upsert("finished") пропускается →
+        // refresh() возвращает active → RefereePanel не скрывается («Партия
+        // окончена» кажется сломанной).
+        val resolvedGid = syncManager?.resolveGameId(gid) ?: gid
         // Оптимистично обновляем локальный Game (если он в Room).
-        val local = games.getById(gid)
+        val local = games.getById(resolvedGid)
         if (local != null) {
             games.upsert(
                 local.copy(
@@ -186,8 +198,8 @@ class GameRepository(
         // Возвращаем оптимистичный DTO (без scores — VM их сам держит).
         return Result.success(
             GameDto(
-                id = gid,
-                tournamentId = tid,
+                id = resolvedGid,
+                tournamentId = syncManager?.resolveTournamentId(tid) ?: tid,
                 orderIndex = local?.orderIndex ?: 0,
                 status = "finished",
                 startedAt = local?.startedAt ?: now,
@@ -209,7 +221,11 @@ class GameRepository(
         ballNumber: Int?,
         pointsDelta: Int,
     ): Result<ShotDto> {
-        val body = CreateShotBody(participantId, kind, ballNumber, pointsDelta)
+        // ViewModel держит participantId из fromRoom() до refresh() с сервера;
+        // после успешного create_tournament participant remapнулся, но VM ещё
+        // знает старый local pid. Резолвим тут, чтобы серверу ушёл настоящий id.
+        val resolvedPid = syncManager?.resolveParticipantId(participantId) ?: participantId
+        val body = CreateShotBody(resolvedPid, kind, ballNumber, pointsDelta)
         // Если Room/outbox не подключены (тесты) — падаем на online.
         val dao = shotDao
         val outbox = outboxDao
@@ -225,7 +241,7 @@ class GameRepository(
         val local = ShotEntity(
             id = localId,
             gameId = gid,
-            participantId = participantId,
+            participantId = resolvedPid,
             kind = kind,
             ballNumber = ballNumber,
             pointsDelta = pointsDelta,
@@ -250,7 +266,7 @@ class GameRepository(
             ShotDto(
                 id = localId,
                 gameId = gid,
-                participantId = participantId,
+                participantId = resolvedPid,
                 kind = kind,
                 ballNumber = ballNumber,
                 pointsDelta = pointsDelta,

@@ -151,6 +151,7 @@ class AppContainer(context: Context) {
             appScope = appScope,
             baseUrl = "https://billiardtracker.alekseylosev.ru/",
             tokenProvider = { userPrefs.getToken() },
+            userPrefs = userPrefs,
             devLoggerProvider = { _devLogger },
         )
 

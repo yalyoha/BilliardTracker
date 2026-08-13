@@ -46,6 +46,7 @@ class SyncManager(
     private val appScope: CoroutineScope,
     private val baseUrl: String,
     private val tokenProvider: suspend () -> String?,
+    private val userPrefs: com.example.billiardtracker.data.prefs.UserPrefs? = null,
     private val devLoggerProvider: () -> com.example.billiardtracker.data.telemetry.DevLogger? = { null },
 ) {
     private fun devlog(action: String, ok: Boolean? = null, httpCode: Int? = null, err: String? = null, payload: Map<String, Any?>? = null) {
@@ -59,6 +60,67 @@ class SyncManager(
     private val _teamIdRemaps = MutableSharedFlow<Pair<Long, Long>>(extraBufferCapacity = 32)
     val teamIdRemaps: SharedFlow<Pair<Long, Long>> = _teamIdRemaps.asSharedFlow()
 
+    // In-memory fallback remap: если сущность заменилась (delete+insert с
+    // server id) и новый op заквоился со stale local id, DAO.getById(local)
+    // вернёт null и resolveEndpoint встанет в gridlock. Consult этот map,
+    // когда DAO не нашёл entity. Persistent через UserPrefs (id_remap строка
+    // формата "t:local:server,g:local:server,...") чтобы пережить process
+    // kill между успехом create_tournament и enqueue дочернего start_game.
+    private val tournamentIdRemap = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+    private val gameIdRemap = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+    private val participantIdRemap = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+    private val remapPersistMutex = Mutex()
+
+    /** Resolve local (negative) participant id → server id, если известно
+     *  из cascade create_tournament. Иначе возвращает исходный id. */
+    fun resolveParticipantId(pid: Long): Long =
+        if (pid >= 0) pid else participantIdRemap[pid] ?: pid
+
+    /** Resolve local (negative) tournament id → server id (если create_tournament
+     *  уже синкнулся и в кэше есть remap). Используется TournamentRepository.fetchDetail
+     *  чтобы после sync грузить турнир из API по правильному id. */
+    fun resolveTournamentId(tid: Long): Long =
+        if (tid >= 0) tid else tournamentIdRemap[tid] ?: tid
+
+    /** Аналогично для game — GameRepository.finishGame и т.п. */
+    fun resolveGameId(gid: Long): Long =
+        if (gid >= 0) gid else gameIdRemap[gid] ?: gid
+
+    private suspend fun loadPersistedRemap() {
+        val raw = try { userPrefs?.getIdRemap() } catch (_: Throwable) { null } ?: return
+        for (entry in raw.split(',')) {
+            val parts = entry.split(':')
+            if (parts.size != 3) continue
+            val local = parts[1].toLongOrNull() ?: continue
+            val server = parts[2].toLongOrNull() ?: continue
+            when (parts[0]) {
+                "t" -> tournamentIdRemap[local] = server
+                "g" -> gameIdRemap[local] = server
+                "p" -> participantIdRemap[local] = server
+            }
+        }
+    }
+
+    private suspend fun persistRemap() {
+        val prefs = userPrefs ?: return
+        remapPersistMutex.withLock {
+            val sb = StringBuilder()
+            for ((l, s) in tournamentIdRemap) {
+                if (sb.isNotEmpty()) sb.append(',')
+                sb.append("t:").append(l).append(':').append(s)
+            }
+            for ((l, s) in gameIdRemap) {
+                if (sb.isNotEmpty()) sb.append(',')
+                sb.append("g:").append(l).append(':').append(s)
+            }
+            for ((l, s) in participantIdRemap) {
+                if (sb.isNotEmpty()) sb.append(',')
+                sb.append("p:").append(l).append(':').append(s)
+            }
+            try { prefs.setIdRemap(sb.toString()) } catch (_: Throwable) { }
+        }
+    }
+
     init {
         // Триггер: как только сеть появилась — драйним очередь. Ошибки
         // ловим на месте, чтобы uncaught exception в фоновом коррутине
@@ -67,6 +129,7 @@ class SyncManager(
         // проходил (юзер видит вечное ⏳). Найдено v1.20.0 dev-log'ом.
         appScope.launch(Dispatchers.IO) {
             try {
+                loadPersistedRemap()
                 networkMonitor.online.collect { online ->
                     if (online) runCatching { drain() }
                 }
@@ -86,21 +149,38 @@ class SyncManager(
             return
         }
         try {
-            val ops = try { outboxDao.pendingOps() } catch (t: Throwable) {
-                devlog("drain-pendingOps-fail", ok = false, err = t.message)
-                return
-            }
-            devlog("drain-start", payload = mapOf("pending" to ops.size))
-            // Проходим все ops. НЕ прерываемся при неудаче: могут быть
-            // независимые ops дальше (напр. delete_shot для серверного shot).
-            for (op in ops) {
-                try { executeOne(op) } catch (t: Throwable) {
-                    devlog("op-exception", ok = false, err = t.message,
-                        payload = mapOf("kind" to op.kind, "opId" to op.opId))
+            // Chain: create_tournament → start_game → add_shot. Успешный
+            // create_tournament внутри своего onSuccess каскадно правит в DB
+            // localTournamentId у зависимых outbox-ops. Но текущий цикл держит
+            // in-memory snapshot ops → следующий start_game видит stale tid, а
+            // сущность в DAO уже удалена по этому id → op-dep-not-ready навсегда.
+            // Решение: re-fetch pending после каждого прохода, повторять пока
+            // pending count уменьшается (значит cascade разблокировал что-то).
+            var passIdx = 0
+            var initialCount = -1
+            while (true) {
+                val ops = try { outboxDao.pendingOps() } catch (t: Throwable) {
+                    devlog("drain-pendingOps-fail", ok = false, err = t.message)
+                    return
                 }
+                if (initialCount < 0) initialCount = ops.size
+                if (ops.isEmpty()) break
+                if (passIdx == 0) devlog("drain-start", payload = mapOf("pending" to ops.size))
+                val countBefore = ops.size
+                for (op in ops) {
+                    try { executeOne(op) } catch (t: Throwable) {
+                        devlog("op-exception", ok = false, err = t.message,
+                            payload = mapOf("kind" to op.kind, "opId" to op.opId))
+                    }
+                }
+                runCatching { outboxDao.purgeExecuted() }
+                val countAfter = outboxDao.pendingOps().size
+                passIdx += 1
+                if (countAfter >= countBefore) break // прогресса нет — оставшиеся
+                                                     // ждут внешнего события
+                if (passIdx >= 8) { devlog("drain-max-passes"); break } // safety
             }
-            runCatching { outboxDao.purgeExecuted() }
-            devlog("drain-end")
+            devlog("drain-end", payload = mapOf("passes" to passIdx, "initial" to initialCount))
         } finally {
             syncMutex.unlock()
         }
@@ -115,15 +195,24 @@ class SyncManager(
         val tid = op.localTournamentId
         val gid = op.localGameId
         val teamId = op.localTeamId
+        // Bypass для "self-creating" ops: они сами породят serverId, ждать его
+        // до отправки — вечный gridlock. Endpoint у них не содержит соотв. id
+        // (create_tournament → /api/tournaments; start_game → /.../games).
         val realTid = when {
             tid == null -> null
             tid >= 0 -> tid
-            else -> tournamentDao.getById(tid)?.serverId ?: return null
+            op.kind == "create_tournament" -> tid
+            else -> tournamentDao.getById(tid)?.serverId
+                ?: tournamentIdRemap[tid]
+                ?: return null
         }
         val realGid = when {
             gid == null -> null
             gid >= 0 -> gid
-            else -> gameDao.getById(gid)?.serverId ?: return null
+            op.kind == "start_game" -> gid
+            else -> gameDao.getById(gid)?.serverId
+                ?: gameIdRemap[gid]
+                ?: return null
         }
         // create_team не использует teamId в endpoint'е (POST /api/tokens/{tid}/teams)
         // — не блокируем op пока serverId отсутствует, иначе gridlock: sync не
@@ -373,12 +462,22 @@ class SyncManager(
                     // Cascade: games.winnerParticipantId + shots.participantId.
                     gameDao.remapWinnerParticipantId(oldPid, newPid)
                     shotDao.remapParticipantId(oldPid, newPid)
+                    // In-memory remap: add_shot приходит с participantId из
+                    // ViewModel-state, который держит local pid до refresh(). См.
+                    // GameRepository.addShot → SyncManager.resolveParticipantId.
+                    participantIdRemap[oldPid] = newPid
                 }
                 // Cascade: games.tournamentId + pending outbox ops.
                 gameDao.remapTournamentId(oldTid = localTid, newTid = serverT.id)
                 outboxDao.pendingOps()
                     .filter { it.localTournamentId == localTid }
                     .forEach { outboxDao.update(it.copy(localTournamentId = serverT.id)) }
+                // In-memory + persistent fallback: если ViewModel держит stale
+                // localTid и после нашего delete+insert зэнкью start_game/add_shot
+                // с этим localTid, DAO.getById вернёт null → gridlock. Consult map.
+                tournamentIdRemap[localTid] = serverT.id
+                persistRemap()
+                devlog("tournament-remap", payload = mapOf("local" to localTid, "server" to serverT.id))
             }
             "start_game" -> {
                 // Сервер вернул Game{id: <serverId>}. Заменяем локальный
@@ -413,6 +512,10 @@ class SyncManager(
                 outboxDao.pendingOps()
                     .filter { it.localGameId == localGid }
                     .forEach { outboxDao.update(it.copy(localGameId = serverGame.id)) }
+                // In-memory + persistent fallback (см. коммент для tournamentIdRemap).
+                gameIdRemap[localGid] = serverGame.id
+                persistRemap()
+                devlog("game-remap", payload = mapOf("local" to localGid, "server" to serverGame.id))
             }
             "add_shot" -> {
                 val localShotId = op.localShotId ?: return
