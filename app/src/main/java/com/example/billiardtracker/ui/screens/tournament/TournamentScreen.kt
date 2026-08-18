@@ -4,8 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -201,37 +203,120 @@ fun TournamentScreen(
                 Divider()
             }
 
-            // Panel by role
-            if (ui.isReferee) {
-                val cg = ui.currentGame
-                if (cg == null || cg.status == "finished") {
+            // Panel by role — MatchLayout для всех, наблюдатели получают readonly-плитки.
+            val cg = ui.currentGame
+            val profile = com.example.billiardtracker.domain.rules.RuleProfile.forType(
+                com.example.billiardtracker.domain.rules.GameType.entries
+                    .firstOrNull { it.ruleFileSlug == t.gameType } ?: com.example.billiardtracker.domain.rules.GameType.FREE_PYRAMID
+            )
+            if (cg == null || cg.status == "finished") {
+                if (ui.isReferee && t.status == "active") {
                     Column(Modifier.padding(16.dp)) {
                         Button(
                             onClick = viewModel::startGame,
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text("Начать партию") }
                     }
-                } else {
-                    val pottedBalls = ui.currentGameShots
-                        .filter { it.kind == "ball" && it.ballNumber != null }
-                        .mapNotNull { it.ballNumber }
-                        .toSet()
-                    RefereePanel(
-                        participants = t.participants,
-                        currentUserId = ui.myUserId,
-                        myLocalName = ui.myLocalName,
-                        pottedBalls = pottedBalls,
-                        onShot = viewModel::addShot,
-                        onUndo = viewModel::undoLastShot,
-                        onFinish = viewModel::finishGame,
+                } else if (!ui.isReferee) {
+                    val refereeName = t.participants
+                        .firstOrNull { it.userId == t.refereeUserId }
+                        ?.effectiveName(ui.myUserId, ui.myLocalName)
+                        ?: "?"
+                    Text(
+                        "Партия не идёт. Маркёр — $refereeName.",
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else {
-                val refereeName = t.participants
-                    .firstOrNull { it.userId == t.refereeUserId }
-                    ?.effectiveName(ui.myUserId, ui.myLocalName)
-                    ?: "?"
-                ObserverPanel(refereeName = refereeName)
+                val pottedBalls = ui.currentGameShots
+                    .filter { it.kind == "ball" && it.ballNumber != null }
+                    .mapNotNull { it.ballNumber }
+                    .toSet()
+                val scoresByPid: Map<Long, Int> = cg.scores.associate { it.participantId to it.points }
+                var sheetPid by remember { mutableStateOf<Long?>(null) }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(420.dp),
+                ) {
+                    com.example.billiardtracker.ui.screens.tournament.scorers.MatchLayout(
+                        participants = t.participants,
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                    ) { p ->
+                        com.example.billiardtracker.ui.screens.tournament.scorers.ScoreTile(
+                            name = p.effectiveName(ui.myUserId, ui.myLocalName),
+                            isReferee = t.refereeUserId != null && p.userId == t.refereeUserId,
+                            score = scoresByPid[p.id] ?: 0,
+                        ) {
+                            if (!ui.isReferee) {
+                                Text(
+                                    "наблюдатель",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            } else when (profile.scorerKind) {
+                                com.example.billiardtracker.domain.rules.ScorerKind.Counter ->
+                                    com.example.billiardtracker.ui.screens.tournament.scorers.CounterScorer(
+                                        pid = p.id,
+                                        profile = profile,
+                                        currentScore = scoresByPid[p.id] ?: 0,
+                                        onShot = viewModel::addShot,
+                                        onDecrement = viewModel::decrementScore,
+                                    )
+                                com.example.billiardtracker.domain.rules.ScorerKind.Lives ->
+                                    com.example.billiardtracker.ui.screens.tournament.scorers.LivesScorer(
+                                        pid = p.id,
+                                        shots = ui.currentGameShots,
+                                        initialLives = 3,
+                                        onLifeLost = { pid ->
+                                            viewModel.addShot(pid, "life", null, -1)
+                                        },
+                                    )
+                                com.example.billiardtracker.domain.rules.ScorerKind.NumberedBallGrid,
+                                com.example.billiardtracker.domain.rules.ScorerKind.Balance,
+                                com.example.billiardtracker.domain.rules.ScorerKind.Fishki ->
+                                    com.example.billiardtracker.ui.screens.tournament.scorers.NumberedBallGridTile(
+                                        pid = p.id,
+                                        onSelect = { sheetPid = it },
+                                    )
+                            }
+                        }
+                    }
+                }
+                if (ui.isReferee) {
+                    val targetHint = buildString {
+                        when {
+                            profile.winTargetPoints != null -> append("до ${profile.winTargetPoints} очков")
+                            profile.winTargetBalls != null -> append("до ${profile.winTargetBalls} шаров")
+                            else -> append("баланс / жизни")
+                        }
+                        t.participants.forEach { p ->
+                            val s = scoresByPid[p.id] ?: 0
+                            append(" · ${p.effectiveName(ui.myUserId, ui.myLocalName)} $s")
+                        }
+                    }
+                    val autoWinner = t.participants
+                        .maxByOrNull { scoresByPid[it.id] ?: 0 }
+                    com.example.billiardtracker.ui.screens.tournament.scorers.MatchBottomBar(
+                        targetHint = targetHint,
+                        winnerName = autoWinner?.effectiveName(ui.myUserId, ui.myLocalName),
+                        winnerScore = autoWinner?.let { scoresByPid[it.id] ?: 0 },
+                        onUndo = viewModel::undoLastShot,
+                        onFinish = { viewModel.finishGame() },
+                    )
+                }
+                sheetPid?.let { pid ->
+                    val name = t.participants.firstOrNull { it.id == pid }
+                        ?.effectiveName(ui.myUserId, ui.myLocalName) ?: ""
+                    com.example.billiardtracker.ui.screens.tournament.scorers.NumberedBallGridSheet(
+                        selectedPid = pid,
+                        selectedName = name,
+                        pottedBalls = pottedBalls,
+                        onDismiss = { sheetPid = null },
+                        onShot = viewModel::addShot,
+                    )
+                }
             }
         }
 

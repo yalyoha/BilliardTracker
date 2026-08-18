@@ -40,6 +40,12 @@ data class RuleProfile(
     val hasContinuation: Boolean = false,
     /** Free-form guidance / оговорки по правилам. */
     val notes: String? = null,
+    /**
+     * UI-паттерн ввода счёта для этой дисциплины. См. [ScorerKind]. Влияет
+     * только на UI (`TournamentScreen`), никак не участвует в парити-фикстуре
+     * `rule-profiles-expected.json` (там только правила).
+     */
+    val scorerKind: ScorerKind = ScorerKind.NumberedBallGrid,
 ) {
     companion object {
         fun forType(type: GameType): RuleProfile = when (type) {
@@ -55,6 +61,7 @@ data class RuleProfile(
                 allowsDouble = false,
                 tabbedBallsAllowed = false,
                 moneyPlayable = true,
+                scorerKind = ScorerKind.Counter,
                 notes = "Американка: игра любым шаром по любому; свояк засчитывается 1 очком, биток остаётся на месте.",
             )
 
@@ -70,6 +77,7 @@ data class RuleProfile(
                 allowsDouble = false,
                 tabbedBallsAllowed = false,
                 moneyPlayable = true,
+                scorerKind = ScorerKind.Counter,
                 notes = "Московская (Комбинированная): играют только цветным битком; после свояка биток вводится из «дома», игрок дополнительно снимает 1 шар.",
             )
 
@@ -85,6 +93,7 @@ data class RuleProfile(
                 allowsDouble = false,
                 tabbedBallsAllowed = false,
                 moneyPlayable = true,
+                scorerKind = ScorerKind.Counter,
                 notes = "Невская/Сибирская: играют только цветным битком; после свояка биток вводится с руки с любого места стола (не только из «дома»).",
             )
 
@@ -100,6 +109,7 @@ data class RuleProfile(
                 allowsDouble = false,
                 tabbedBallsAllowed = false,
                 moneyPlayable = true,
+                scorerKind = ScorerKind.NumberedBallGrid,
                 notes = "Русская пирамида (71 очко): заказ шар–луза, туз = 11 очков, последний шар = +10; штраф –5/+5; максимум 140 очков в партии.",
             )
 
@@ -118,6 +128,7 @@ data class RuleProfile(
                 tabbedBallsAllowed = false,
                 moneyPlayable = true,
                 hasContinuation = true,
+                scorerKind = ScorerKind.Counter,
                 notes = "Свободная пирамида 14+: после 14-го забитого шара пирамида пере-расставляется без 15-го шара; целевой счёт задаётся регламентом.",
             )
 
@@ -133,6 +144,7 @@ data class RuleProfile(
                 allowsDouble = false,
                 tabbedBallsAllowed = false,
                 moneyPlayable = true,
+                scorerKind = ScorerKind.NumberedBallGrid,
                 notes = "Базовая «до 61»: играют только своим битком, забивать разрешено только прицельные; в расширенной версии — до 71 с премиями за туза/последний шар.",
             )
 
@@ -154,6 +166,7 @@ data class RuleProfile(
                 allowsDouble = false,
                 tabbedBallsAllowed = false,
                 moneyPlayable = true,
+                scorerKind = ScorerKind.NumberedBallGrid,
                 notes = "Официальной дисциплины «Большая русская партия» в Минспорта РФ нет. Базовый вариант: 15 нумерованных шаров, туз=11, последний +10, штраф –5/+5. Вариант «Каролина» (5 цветных: чёрный=60, розовые 2×30, красные 2×20; цель 151) должен настраиваться регламентом матча.",
             )
 
@@ -173,6 +186,7 @@ data class RuleProfile(
                 allowsDouble = false,
                 tabbedBallsAllowed = false,
                 moneyPlayable = true,
+                scorerKind = ScorerKind.Lives,
                 notes = "Гусарская игра на выбывание: каждому игроку присваивается «именной» шар, побеждает последний оставшийся; учёт — по «крестам» (обычно 3), а не по очкам.",
             )
 
@@ -188,6 +202,7 @@ data class RuleProfile(
                 allowsDouble = false,
                 tabbedBallsAllowed = false,
                 moneyPlayable = true,
+                scorerKind = ScorerKind.Counter,
                 notes = "Разновидность Комбинированной: за свояк шар со стола снимает соперник (выбирая самый неудобный).",
             )
 
@@ -206,6 +221,7 @@ data class RuleProfile(
                 allowsDouble = false,
                 tabbedBallsAllowed = false,
                 moneyPlayable = true,
+                scorerKind = ScorerKind.NumberedBallGrid,
                 notes = "3+ игроков, каждый сам за себя: за забитый шар игрок получает по 1 очку/сумме со всех остальных, за штрафной — платит всем. Победитель — с лучшим итоговым балансом.",
             )
 
@@ -228,6 +244,7 @@ data class RuleProfile(
                 allowsDouble = false,
                 tabbedBallsAllowed = true,
                 moneyPlayable = true,
+                scorerKind = ScorerKind.NumberedBallGrid,
                 notes = "Карамболь с кеглями (7 фишек): большая кегля 25 (изолированно 50), 4 малые по 5, 2 боковые по 30, карамболь 5. Игра «с горы» — обнулить лимит.",
             )
 
@@ -243,6 +260,7 @@ data class RuleProfile(
                 allowsDouble = false,
                 tabbedBallsAllowed = false,
                 moneyPlayable = true,
+                scorerKind = ScorerKind.Counter,
                 notes = "Каждому игроку — одна из двух ближних угловых луз; засчитываются только шары в свою лузу. Обычно до 8 шаров.",
             )
 
@@ -261,6 +279,7 @@ data class RuleProfile(
                 allowsDouble = false,
                 tabbedBallsAllowed = false,
                 moneyPlayable = true,
+                scorerKind = ScorerKind.Lives,
                 notes = "3+ игроков по кругу, один удар на игрока. Промах — минус «жизнь» (обычно из 3–5). Побеждает последний оставшийся.",
             )
 
@@ -276,6 +295,7 @@ data class RuleProfile(
                 allowsDouble = false,
                 tabbedBallsAllowed = false,
                 moneyPlayable = true,
+                scorerKind = ScorerKind.Counter,
                 notes = "Гибрид Свободной: свояк засчитывается только с заранее объявленной траекторией («накат» или «отскок»); незаказанный свояк — штраф.",
             )
         }

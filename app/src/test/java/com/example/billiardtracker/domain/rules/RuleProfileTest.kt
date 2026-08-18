@@ -139,4 +139,33 @@ class RuleProfileTest {
         }
         assertEquals("must have checked all 14 disciplines", 14, checked)
     }
+
+    @Test fun `every game type has the expected scorerKind`() {
+        val expected = mapOf(
+            // Group A — Numbered ball-grid (номер шара = очки)
+            GameType.CLASSICAL_PYRAMID to ScorerKind.NumberedBallGrid,
+            GameType.SMALL_RUSSIAN_PARTY to ScorerKind.NumberedBallGrid,
+            GameType.BIG_RUSSIAN_PARTY to ScorerKind.NumberedBallGrid,
+            // Group B — Counter (все шары по 1 очку, ±1 кнопки)
+            GameType.FREE_PYRAMID to ScorerKind.Counter,
+            GameType.COMBINED_PYRAMID to ScorerKind.Counter,
+            GameType.DYNAMIC_PYRAMID to ScorerKind.Counter,
+            GameType.FREE_PYRAMID_CONTINUATION to ScorerKind.Counter,
+            GameType.YAROSLAVSKAYA to ScorerKind.Counter,
+            GameType.EUROPEAN_PYRAMID to ScorerKind.Counter,
+            GameType.ONE_POCKET_RU to ScorerKind.Counter,
+            // Group C — Lives (жизни/кресты, на выбывание)
+            GameType.ALAGYOR to ScorerKind.Lives,
+            GameType.GROSH to ScorerKind.Lives,
+            // Group D — Balance (v1.23.0+, пока Numbered fallback)
+            GameType.KOLKHOZ to ScorerKind.NumberedBallGrid,
+            // Group E — Fishki (v1.23.0+, пока Numbered fallback)
+            GameType.FISHKI to ScorerKind.NumberedBallGrid,
+        )
+        for (t in GameType.entries) {
+            val p = RuleProfile.forType(t)
+            assertEquals("scorerKind[$t]", expected[t], p.scorerKind)
+        }
+        assertEquals("map must cover all 14 types", 14, expected.size)
+    }
 }

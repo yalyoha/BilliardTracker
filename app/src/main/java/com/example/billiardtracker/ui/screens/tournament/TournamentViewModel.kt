@@ -37,6 +37,15 @@ data class TournamentUiState(
         get() = tournament != null && tournament.refereeUserId == myUserId
 }
 
+/**
+ * Выбирает shot для отката при тапе «−» в CounterScorer: последний positive
+ * (pointsDelta > 0) shot указанного участника в списке. Игнорирует штрафы
+ * и off-table события — их откатывают через общий Undo, а не per-tile «−».
+ * Extract'нута из VM ради юнит-теста (VM в целом требует Room/Retrofit fakes).
+ */
+internal fun pickShotToDecrement(shots: List<ShotDto>, pid: Long): ShotDto? =
+    shots.lastOrNull { it.participantId == pid && it.pointsDelta > 0 }
+
 class TournamentViewModel(
     private val tournamentId: Long,
     private val tournamentRepo: TournamentRepository,
@@ -190,6 +199,34 @@ class TournamentViewModel(
         }
         viewModelScope.launch {
             gameRepo.finishGame(tournamentId, game.id, resolvedWinner).onSuccess { refresh() }
+        }
+    }
+
+    /**
+     * «−» в CounterScorer: удаляет последний positive shot указанного игрока.
+     * Отличается от [undoLastShot], который тянет любой последний shot независимо
+     * от игрока. Disabled на UI-уровне когда `pickShotToDecrement()` вернёт null.
+     */
+    fun decrementScore(pid: Long) {
+        val gid = _ui.value.currentGame?.id ?: return
+        val shot = pickShotToDecrement(_ui.value.currentGameShots, pid) ?: return
+        viewModelScope.launch {
+            gameRepo.deleteShot(gid, shot.id).onSuccess {
+                val newShots = _ui.value.currentGameShots.filterNot { it.id == shot.id }
+                val updatedGame = _ui.value.currentGame?.let { g ->
+                    val by = newShots.filter { it.gameId == g.id }
+                        .groupBy { it.participantId }
+                        .mapValues { (_, list) -> list.sumOf { it.pointsDelta } }
+                    g.copy(scores = by.map {
+                        com.example.billiardtracker.data.remote.dto.ScoreDto(it.key, it.value)
+                    })
+                }
+                _ui.value = _ui.value.copy(
+                    currentGameShots = newShots,
+                    currentGame = updatedGame,
+                )
+                refresh()
+            }
         }
     }
 
