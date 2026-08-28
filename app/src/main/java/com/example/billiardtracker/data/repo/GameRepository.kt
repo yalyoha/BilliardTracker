@@ -337,7 +337,12 @@ class GameRepository(
                         lastSyncedAt = System.currentTimeMillis(),
                     )
                 })
-                Result.success(list)
+                // Локальные pending shots ещё не долетели до сервера, но уже в Room
+                // (gameId после start_game-remap уже серверный). Мержим, иначе после
+                // remap игры refresh() «съедает» только что нажатый «+» и счёт
+                // визуально сбрасывается на 0.
+                val localPending = readShotsFromRoom(gid).filter { it.id < 0 }
+                Result.success(list + localPending)
             } else Result.success(readShotsFromRoom(gid))
         } catch (e: Exception) {
             Result.success(readShotsFromRoom(gid))

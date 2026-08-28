@@ -15,6 +15,9 @@ data class TournamentDto(
     val startedAt: Long,
     val finishedAt: Long? = null,
     val winsRequired: Int? = null,
+    // v1.23.0
+    val stakeMode: String? = null,       // "per_ball" | "per_match"; null = legacy per_ball
+    val gameSize: Int? = null,           // размер партии в шарах, 0..1000; null = use profile default
     val participants: List<ParticipantDto> = emptyList(),
 )
 
@@ -51,6 +54,8 @@ data class CreateTournamentBody(
     val moneyPerBallKop: Long? = null,
     val winsRequired: Int? = null,
     val masterTokenId: Long? = null,
+    val stakeMode: String? = null,    // v1.23.0: "per_ball" | "per_match"
+    val gameSize: Int? = null,        // v1.23.0: размер партии в шарах (0..1000)
     val participants: List<CreateParticipantBody> = emptyList(),
 )
 

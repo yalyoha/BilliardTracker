@@ -94,15 +94,11 @@ class TournamentViewModel(
                 }
                 else -> mergedGames.lastOrNull { it.status == "active" } ?: mergedGames.lastOrNull()
             }
-            val shots = if (active == null) emptyList() else {
-                val serverShots = if (active.id >= 0)
-                    gameRepo.listShots(active.id).getOrElse { emptyList() } else emptyList()
-                // Сохраняем локальные (id<0) shots для активной игры.
-                val localShots = _ui.value.currentGameShots.filter {
-                    it.id < 0 && it.gameId == active.id
-                }
-                serverShots + localShots
-            }
+            // listShots уже мержит серверные + локальные pending (id<0) из Room
+            // с корректным gameId после start_game-remap. Локальная копия в VM
+            // после remap отставала — оптимистичный «+» визуально сбрасывался.
+            val shots = if (active == null) emptyList()
+                else gameRepo.listShots(active.id).getOrElse { emptyList() }
             _ui.value = _ui.value.copy(
                 loading = false,
                 tournament = t,

@@ -11,18 +11,26 @@ import com.example.billiardtracker.domain.rules.GameType
 import com.example.billiardtracker.domain.rules.RuleProfile
 import com.example.billiardtracker.domain.usecase.DetectClubUseCase
 import com.example.billiardtracker.ui.nav.NewTournamentState
+import com.example.billiardtracker.ui.nav.TeamState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+/**
+ * v1.23.0: добавлены поля stakeMode (за шар|за встречу), gameSize (0..1000).
+ * Также экран теперь сам управляет выбором состава — из TeamState читаем список
+ * готовых составов и подставляем игроков активного как participants.
+ */
 data class StakeUiState(
     val gameTypeName: String = "",
     val gameTypeSlug: String = "",
     val moneyPlayable: Boolean = false,
     val title: String = "",
     val stakeRub: String = "100",
+    val stakeMode: String = "per_ball",   // per_ball | per_match
+    val gameSize: Int = 8,                // размер партии в шарах (0..1000)
     val winsRequired: Int = 3,
     val perParticipant: List<ParticipantStakeUi> = emptyList(),
     val nearbyClubs: List<ClubDto> = emptyList(),
@@ -43,14 +51,27 @@ class StakeSetupViewModel(
     private val repo: TournamentRepository,
     private val userPrefs: UserPrefs,
     private val detectClub: DetectClubUseCase,
+    private val teamState: TeamState,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(StakeUiState())
     val ui: StateFlow<StakeUiState> = _ui.asStateFlow()
 
+    // Прокидываем teams/activeTeamId из TeamState как есть — UI подписывается
+    // напрямую на них через collectAsStateWithLifecycle.
+    val teams = teamState.teams
+    val activeTeamId = teamState.activeTeamId
+
     init {
         loadFromState()
         viewModelScope.launch { fetchNearbyAndAutoFill() }
+        viewModelScope.launch { teamState.refresh() }
+        // Реактивно перезаполняем участников при смене активного состава.
+        viewModelScope.launch {
+            teamState.activeTeamId.collect { id ->
+                if (id != null) fillParticipantsFromTeam(id)
+            }
+        }
     }
 
     fun loadFromState() {
@@ -58,16 +79,28 @@ class StakeSetupViewModel(
         if (slug.isNullOrBlank()) return
         val gt = GameType.entries.firstOrNull { it.ruleFileSlug == slug } ?: return
         val profile = RuleProfile.forType(gt)
+        val defaultSize = profile.winTargetPoints ?: profile.winTargetBalls ?: 8
+        // Если participants уже были положены навигацией (legacy path) — берём их;
+        // иначе позже fillParticipantsFromTeam заполнит из активного состава.
         val parts = newTournamentState.participants.value
         _ui.value = _ui.value.copy(
             gameTypeName = gt.displayName,
             gameTypeSlug = slug,
             moneyPlayable = profile.moneyPlayable,
             title = newTournamentState.title.value ?: _ui.value.title,
-            stakeRub = "100",
+            stakeRub = _ui.value.stakeRub.ifBlank { "100" },
+            gameSize = defaultSize,
             winsRequired = newTournamentState.winsRequired.value ?: 3,
-            perParticipant = parts.map {
-                ParticipantStakeUi(displayName = it.displayName, phone = it.phone)
+            perParticipant = if (parts.isEmpty()) _ui.value.perParticipant
+                             else parts.map { ParticipantStakeUi(displayName = it.displayName, phone = it.phone) },
+        )
+    }
+
+    private fun fillParticipantsFromTeam(teamId: Long) {
+        val team = teamState.teamById(teamId) ?: return
+        _ui.value = _ui.value.copy(
+            perParticipant = team.players.map { m ->
+                ParticipantStakeUi(displayName = m.displayName, phone = m.phone)
             },
         )
     }
@@ -101,8 +134,6 @@ class StakeSetupViewModel(
      */
     private suspend fun applyClubToTitle(club: ClubDto) {
         val prefix = club.name
-        // matches "Название (12)" — только вариант со скобками; старые "№ N"
-        // тоже учитываем чтобы не сталкиваться с уже созданными.
         val re = Regex("^${Regex.escape(prefix)}\\s*(?:\\((\\d+)\\)|№\\s*(\\d+))\$")
         val existing = repo.observeAll().first()
             .mapNotNull { it.title }
@@ -113,6 +144,17 @@ class StakeSetupViewModel(
 
     fun setTitle(v: String) { _ui.value = _ui.value.copy(title = v) }
     fun setStake(v: String) { _ui.value = _ui.value.copy(stakeRub = v.filter { it.isDigit() }) }
+    fun setStakeMode(mode: String) {
+        val normalized = if (mode == "per_match") "per_match" else "per_ball"
+        _ui.value = _ui.value.copy(stakeMode = normalized)
+    }
+    fun setGameSize(v: Int) { _ui.value = _ui.value.copy(gameSize = v.coerceIn(0, 1000)) }
+    fun incGameSize() { setGameSize(_ui.value.gameSize + 1) }
+    fun decGameSize() { setGameSize(_ui.value.gameSize - 1) }
+    fun setGameSizeText(v: String) {
+        val n = v.filter { it.isDigit() }.toIntOrNull() ?: 0
+        setGameSize(n)
+    }
     fun setWinsRequired(v: Int) { _ui.value = _ui.value.copy(winsRequired = v.coerceIn(1, 10)) }
     fun setHandicap(idx: Int, v: Int) {
         val list = _ui.value.perParticipant.toMutableList()
@@ -131,8 +173,12 @@ class StakeSetupViewModel(
             _ui.value = _ui.value.copy(error = "Игра не выбрана — вернись назад и выбери")
             return
         }
+        if (_ui.value.perParticipant.isEmpty()) {
+            _ui.value = _ui.value.copy(error = "Нет игроков — выбери или создай состав ниже")
+            return
+        }
         val moneyKop = _ui.value.stakeRub.toLongOrNull()?.times(100)
-        _ui.value = _ui.value.copy(loading = true)
+        _ui.value = _ui.value.copy(loading = true, error = null)
         viewModelScope.launch {
             val activeTokenId = userPrefs.getActiveTokenId()
             val currentUserId = userPrefs.getUserId() ?: 0
@@ -142,6 +188,8 @@ class StakeSetupViewModel(
                 moneyPerBallKop = moneyKop,
                 winsRequired = _ui.value.winsRequired,
                 masterTokenId = activeTokenId,
+                stakeMode = _ui.value.stakeMode,
+                gameSize = _ui.value.gameSize.takeIf { it > 0 },
                 participants = _ui.value.perParticipant.map { p ->
                     CreateParticipantBody(
                         phone = p.phone,

@@ -32,11 +32,9 @@ import com.example.billiardtracker.ui.components.BilliardTopBar
 fun HomeScreen(
     viewModel: HomeViewModel,
     onPickGameType: (GameType) -> Unit,
-    onAddTeam: () -> Unit,
     onOpenTournament: (Long) -> Unit,
 ) {
     val enabled by viewModel.enabledGameSlugs.collectAsStateWithLifecycle()
-    val hasTeam by viewModel.hasReadyTeam.collectAsStateWithLifecycle()
     val active by viewModel.activeTournaments.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -47,28 +45,10 @@ fun HomeScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (!hasTeam) {
-                item {
-                    Card(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(
-                                "Чтобы начать встречу — нужен состав.",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            Button(onClick = onAddTeam, modifier = Modifier.fillMaxWidth()) {
-                                Text("Добавить состав")
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                }
-            }
-
             val enabledTypes = GameType.entries.filter { it.ruleFileSlug in enabled }
             items(enabledTypes, key = { it.name }) { gt ->
                 Button(
                     onClick = { onPickGameType(gt) },
-                    enabled = hasTeam,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(gt.displayName) }
             }

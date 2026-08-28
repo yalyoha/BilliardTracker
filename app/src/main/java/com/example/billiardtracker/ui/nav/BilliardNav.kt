@@ -7,7 +7,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Settings
@@ -83,9 +82,11 @@ sealed class Route(val path: String) {
 
 private data class NavTab(val route: String, val label: String, val icon: ImageVector)
 
+// v1.23.0: Составы больше не отдельная вкладка — управление составами
+// перенесено внутрь экрана «Создать встречу» (StakeSetupScreen). Route.Team
+// пока оставлен как sub-route (Home → Team fallback), но в bottom-nav не входит.
 private val TABS = listOf(
     NavTab(Route.Game.path, "Игра", Icons.Filled.EmojiEvents),
-    NavTab(Route.Team.path, "Составы", Icons.Filled.Groups),
     NavTab(Route.Profile.path, "Профиль", Icons.Filled.Person),
     NavTab(Route.Stats.path, "Статистика", Icons.Filled.QueryStats),
     NavTab(Route.Settings.path, "Настройки", Icons.Filled.Settings),
@@ -186,26 +187,16 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                 modifier = Modifier.fillMaxSize(),
             ) {
             composable(Route.Game.path) {
-                val vm = HomeViewModel(container.tournamentRepository, container.userPrefs, container.teamState)
+                val vm = HomeViewModel(container.tournamentRepository, container.userPrefs)
                 HomeScreen(
                     viewModel = vm,
                     onPickGameType = { gt ->
-                        val teamState = container.teamState
-                        val activeId = teamState.activeTeamId.value
-                        val active = teamState.teamById(activeId)
-                            ?: teamState.teams.value.firstOrNull()
-                        if (active == null || active.players.isEmpty()) return@HomeScreen
+                        // v1.23.0: состав больше не выбирается на Home — только
+                        // тип игры. Участники набираются на StakeSetupScreen
+                        // (там встроенный team-picker/editor).
                         container.newTournamentState.gameType.value = gt.ruleFileSlug
-                        container.newTournamentState.participants.value =
-                            teamState.asParticipantBodies(active.id)
+                        container.newTournamentState.participants.value = emptyList()
                         nav.navigate(Route.StakeSetup.path)
-                    },
-                    onAddTeam = {
-                        nav.navigate(Route.Team.path) {
-                            popUpTo(Route.Game.path) { saveState = true; inclusive = false }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
                     },
                     onOpenTournament = { id -> nav.navigate(Route.Tournament.build(id)) },
                 )
@@ -260,14 +251,20 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                 )
             }
             composable(Route.StakeSetup.path) {
-                val vm = StakeSetupViewModel(
+                val stakeVm = StakeSetupViewModel(
                     container.newTournamentState,
                     container.tournamentRepository,
                     container.userPrefs,
                     container.detectClubUseCase,
+                    container.teamState,
+                )
+                val teamVm = com.example.billiardtracker.ui.screens.team.TeamViewModel(
+                    container.userPrefs,
+                    container.teamState,
                 )
                 StakeSetupScreen(
-                    viewModel = vm,
+                    viewModel = stakeVm,
+                    teamViewModel = teamVm,
                     onBack = { nav.popBackStack() },
                     onCreated = { id ->
                         nav.navigate(Route.Tournament.build(id)) {
