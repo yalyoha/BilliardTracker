@@ -20,9 +20,9 @@ import androidx.compose.ui.graphics.Color
 enum class AppColorScheme(val displayName: String) {
     ORIGINAL("Сукно (original)"),
     EARTH("Кофе"),
-    PERIWINKLE("Сирень"),
-    RETRO("Ретро"),
-    VIVID("Радуга"),
+    PERIWINKLE("Лотус"),
+    RETRO("Ярко №1"),
+    VIVID("Ярко №2"),
     ;
     companion object {
         fun fromKey(key: String?): AppColorScheme = entries.firstOrNull { it.name == key } ?: ORIGINAL
