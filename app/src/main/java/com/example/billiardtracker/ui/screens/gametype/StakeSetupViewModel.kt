@@ -34,10 +34,21 @@ data class StakeUiState(
     val winsRequired: Int = 3,
     val perParticipant: List<ParticipantStakeUi> = emptyList(),
     val nearbyClubs: List<ClubDto> = emptyList(),
+    // v1.24.0 (task 1): владелец больше не добавляется автоматически. UI знает
+    // локальный профиль (имя+телефон) и предлагает кнопку «Добавить владельца
+    // телефона», если его ещё нет в списке участников.
+    val ownerName: String = "",
+    val ownerPhone: String? = null,
     val loading: Boolean = false,
     val error: String? = null,
     val createdTournamentId: Long? = null,
-)
+) {
+    /** true если владелец телефона уже в списке участников (по phone-match). */
+    val ownerAlreadyIn: Boolean
+        get() = ownerPhone != null && perParticipant.any {
+            it.phone?.filter { c -> c.isDigit() } == ownerPhone.filter { c -> c.isDigit() }
+        }
+}
 
 data class ParticipantStakeUi(
     val displayName: String,
@@ -71,6 +82,12 @@ class StakeSetupViewModel(
             teamState.activeTeamId.collect { id ->
                 if (id != null) fillParticipantsFromTeam(id)
             }
+        }
+        // Подгружаем локальный профиль (name+phone) для кнопки «Добавить владельца».
+        viewModelScope.launch {
+            val name = userPrefs.getName().orEmpty()
+            val phone = userPrefs.getPhone()
+            _ui.value = _ui.value.copy(ownerName = name, ownerPhone = phone)
         }
     }
 
@@ -164,6 +181,32 @@ class StakeSetupViewModel(
     fun setOverride(idx: Int, v: String) {
         val list = _ui.value.perParticipant.toMutableList()
         list[idx] = list[idx].copy(overrideRub = v.filter { it.isDigit() })
+        _ui.value = _ui.value.copy(perParticipant = list)
+    }
+
+    /**
+     * v1.24.0 (todo task 1): opt-in-добавление владельца телефона в состав
+     * встречи. Раньше владелец подсасывался автоматически (backend + текст на
+     * экране про «Ты автоматически добавляешься»), но юзеру нужна опция —
+     * иногда владелец не играет, а только ведёт счёт.
+     */
+    fun addOwnerAsParticipant() {
+        val name = _ui.value.ownerName.ifBlank { "Я" }
+        val phone = _ui.value.ownerPhone
+        if (_ui.value.ownerAlreadyIn) return
+        _ui.value = _ui.value.copy(
+            perParticipant = _ui.value.perParticipant + ParticipantStakeUi(
+                displayName = name,
+                phone = phone,
+            ),
+        )
+    }
+
+    /** Убрать участника по индексу (используется UI-кнопкой «×» рядом с игроком). */
+    fun removeParticipant(idx: Int) {
+        val list = _ui.value.perParticipant.toMutableList()
+        if (idx !in list.indices) return
+        list.removeAt(idx)
         _ui.value = _ui.value.copy(perParticipant = list)
     }
 

@@ -5,14 +5,49 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.Color as ComposeColor
+import com.example.billiardtracker.ui.theme.AccentGold
+import com.example.billiardtracker.ui.theme.AppColorScheme
+import com.example.billiardtracker.ui.theme.BallCream
+import com.example.billiardtracker.ui.theme.EarthAshBrown
+import com.example.billiardtracker.ui.theme.EarthDim
+import com.example.billiardtracker.ui.theme.EarthKhaki
+import com.example.billiardtracker.ui.theme.EarthPlum
+import com.example.billiardtracker.ui.theme.EarthTaupe
+import com.example.billiardtracker.ui.theme.FeltDark
+import com.example.billiardtracker.ui.theme.FeltGreen
+import com.example.billiardtracker.ui.theme.FeltHeader
+import com.example.billiardtracker.ui.theme.GraphiteSurface
+import com.example.billiardtracker.ui.theme.PeriDark
+import com.example.billiardtracker.ui.theme.PeriDim
+import com.example.billiardtracker.ui.theme.PeriLavender
+import com.example.billiardtracker.ui.theme.PeriLight
+import com.example.billiardtracker.ui.theme.PeriMain
+import com.example.billiardtracker.ui.theme.RetroCrimson
+import com.example.billiardtracker.ui.theme.RetroFlame
+import com.example.billiardtracker.ui.theme.RetroIndigo
+import com.example.billiardtracker.ui.theme.RetroLime
+import com.example.billiardtracker.ui.theme.RetroTeal
+import com.example.billiardtracker.ui.theme.VividBlue
+import com.example.billiardtracker.ui.theme.VividGreen
+import com.example.billiardtracker.ui.theme.VividOrange
+import com.example.billiardtracker.ui.theme.VividRed
+import com.example.billiardtracker.ui.theme.VividSand
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -66,6 +101,8 @@ fun SettingsScreen(
     val tokensState by viewModel.tokens.collectAsStateWithLifecycle()
     val activeTokenId by viewModel.activeTokenId.collectAsStateWithLifecycle()
     val enabledSlugs by viewModel.enabledGameSlugs.collectAsStateWithLifecycle()
+    val colorSchemeKey by viewModel.colorScheme.collectAsStateWithLifecycle()
+    val darkTheme by viewModel.darkTheme.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var showUpdateDialog by remember { mutableStateOf(false) }
@@ -115,6 +152,15 @@ fun SettingsScreen(
                     if (ui.message != null) Text(ui.message!!, style = MaterialTheme.typography.bodySmall)
                 }
             }
+
+            // v1.24.0: 5 палитр × dark/light. Меняется на лету — MainActivity
+            // подписывается на userPrefs и рекомпозит BilliardTrackerTheme.
+            AppearanceCard(
+                schemeKey = colorSchemeKey,
+                darkTheme = darkTheme,
+                onPickScheme = viewModel::setColorScheme,
+                onToggleDark = viewModel::setDarkTheme,
+            )
 
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -456,6 +502,80 @@ private fun RenameTokenDialog(
             TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Отмена") }
         },
     )
+}
+
+/**
+ * v1.24.0: карточка «Оформление» — выбор из 5 цветовых схем + dark/light toggle.
+ * Каждая палитра — Row с 5 цветными свотчами (превью) + названием. Активная
+ * подсвечена фоном primaryContainer.
+ */
+@Composable
+private fun AppearanceCard(
+    schemeKey: String,
+    darkTheme: Boolean,
+    onPickScheme: (String) -> Unit,
+    onToggleDark: (Boolean) -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Оформление", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Цветовая схема и режим тёмный/светлый — применяется сразу.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Тёмная тема", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        if (darkTheme) "Тёмный фон" else "Светлый фон",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Switch(checked = darkTheme, onCheckedChange = onToggleDark)
+            }
+            HorizontalDivider()
+            AppColorScheme.entries.forEach { s ->
+                val selected = s.name == schemeKey
+                val swatches = swatchesFor(s, dark = darkTheme)
+                val rowBg = if (selected) MaterialTheme.colorScheme.primaryContainer
+                            else ComposeColor.Transparent
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(rowBg)
+                        .clickable { onPickScheme(s.name) }
+                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        (if (selected) "● " else "○ ") + s.displayName,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    swatches.forEach { color ->
+                        Box(
+                            Modifier
+                                .size(20.dp)
+                                .background(color)
+                                .border(1.dp, ComposeColor(0x33000000)),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 5 представительных цветов схемы для превью-полосы. */
+private fun swatchesFor(s: AppColorScheme, dark: Boolean): List<ComposeColor> = when (s) {
+    AppColorScheme.ORIGINAL ->
+        if (dark) listOf(FeltDark, FeltHeader, GraphiteSurface, AccentGold, BallCream)
+        else listOf(BallCream, ComposeColor(0xFFE0DAC0), ComposeColor.White, AccentGold, FeltGreen)
+    AppColorScheme.EARTH -> listOf(EarthKhaki, EarthTaupe, EarthAshBrown, EarthDim, EarthPlum)
+    AppColorScheme.PERIWINKLE -> listOf(PeriLight, PeriMain, PeriLavender, PeriDim, PeriDark)
+    AppColorScheme.RETRO -> listOf(RetroCrimson, RetroFlame, RetroIndigo, RetroTeal, RetroLime)
+    AppColorScheme.VIVID -> listOf(VividGreen, VividRed, VividOrange, VividBlue, VividSand)
 }
 
 private fun pluralVstrech(n: Int): String {

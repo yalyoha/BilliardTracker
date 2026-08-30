@@ -7,11 +7,13 @@ class MatchLayoutTest {
     @Test fun `2 players → SplitVertical`() {
         assertEquals(TileLayout.SplitVertical, layoutFor(2))
     }
-    @Test fun `3 players → Grid2x2`() {
-        assertEquals(TileLayout.Grid2x2, layoutFor(3))
+    // v1.24.0: 3-4 players moved from Grid2x2 → SplitVertical (плитки всегда
+    // на 100% ширины). См. MatchLayout.kt.
+    @Test fun `3 players → SplitVertical`() {
+        assertEquals(TileLayout.SplitVertical, layoutFor(3))
     }
-    @Test fun `4 players → Grid2x2`() {
-        assertEquals(TileLayout.Grid2x2, layoutFor(4))
+    @Test fun `4 players → SplitVertical`() {
+        assertEquals(TileLayout.SplitVertical, layoutFor(4))
     }
     @Test fun `5 players → VerticalList`() {
         assertEquals(TileLayout.VerticalList, layoutFor(5))

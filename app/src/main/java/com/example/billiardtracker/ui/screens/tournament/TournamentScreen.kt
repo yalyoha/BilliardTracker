@@ -235,10 +235,18 @@ fun TournamentScreen(
                     .toSet()
                 val scoresByPid: Map<Long, Int> = cg.scores.associate { it.participantId to it.points }
                 var sheetPid by remember { mutableStateOf<Long?>(null) }
+                // Плитка всегда во всю ширину; для >2 игроков нужен больший
+                // блок, иначе кнопки "+/Штраф/Свой/Чужой" не помещаются.
+                val panelHeight = when (t.participants.size) {
+                    0, 1, 2 -> 420.dp
+                    3 -> 560.dp
+                    4 -> 720.dp
+                    else -> 720.dp
+                }
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .height(420.dp),
+                        .height(panelHeight),
                 ) {
                     com.example.billiardtracker.ui.screens.tournament.scorers.MatchLayout(
                         participants = t.participants,

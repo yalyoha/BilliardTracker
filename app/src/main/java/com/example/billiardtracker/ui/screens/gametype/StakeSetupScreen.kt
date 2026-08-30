@@ -95,8 +95,6 @@ fun StakeSetupScreen(
             Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(ui.gameTypeName, style = MaterialTheme.typography.titleMedium)
-
             OutlinedTextField(
                 value = ui.title, onValueChange = viewModel::setTitle,
                 label = { Text("Название") },
@@ -148,16 +146,19 @@ fun StakeSetupScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                Text(
-                    "Ты автоматически добавляешься как маркёр и первый участник — здесь настраиваются только приглашённые.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
                 ui.perParticipant.forEachIndexed { i, p ->
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(p.displayName, style = MaterialTheme.typography.bodyMedium)
-                            if (p.phone != null) Text(p.phone, style = MaterialTheme.typography.bodySmall)
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(p.displayName, style = MaterialTheme.typography.bodyMedium)
+                                    if (p.phone != null) Text(p.phone, style = MaterialTheme.typography.bodySmall)
+                                }
+                                TextButton(onClick = { viewModel.removeParticipant(i) }) { Text("×") }
+                            }
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("Фора +", modifier = Modifier.weight(1f))
                                 OutlinedTextField(
@@ -180,6 +181,19 @@ fun StakeSetupScreen(
                             }
                         }
                     }
+                }
+            }
+            // v1.24.0 (task 1): владелец больше не добавляется автоматически —
+            // тапаем «Добавить владельца телефона», если он играет. Скрыта,
+            // если владелец уже в списке (совпадение по phone).
+            if (!ui.ownerAlreadyIn) {
+                OutlinedButton(
+                    onClick = viewModel::addOwnerAsParticipant,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    val label = if (ui.ownerName.isBlank()) "Добавить владельца телефона"
+                                else "Добавить себя — ${ui.ownerName}"
+                    Text(label)
                 }
             }
 

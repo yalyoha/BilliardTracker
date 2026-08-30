@@ -13,17 +13,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.billiardtracker.data.remote.dto.ParticipantDto
 
-enum class TileLayout { SplitVertical, Grid2x2, VerticalList }
+enum class TileLayout { SplitVertical, VerticalList }
 
 /**
- * Портрет-режим (v1.22.0 не поддерживает landscape). Правила:
- *  - 2 игрока → split top/bottom (SplitVertical): каждая плитка ½ высоты.
- *  - 3–4 игрока → 2×2 grid (Grid2x2): для 3-х четвёртая ячейка = «Действия партии».
- *  - 5+ / 1 / 0 → VerticalList: скроллящийся список плиток ~20% высоты каждая.
+ * Портрет-режим. Плитка всегда во всю ширину экрана (v1.24.0):
+ *  - 2–4 игрока → split (SplitVertical): плитки делят высоту поровну.
+ *  - 5+ / 1 / 0 → VerticalList: скроллящийся список плиток.
+ *
+ * До v1.24.0 для 3–4 игроков использовалась Grid2x2 (2 столбца по 50% ширины),
+ * но узкие плитки не помещали новый ряд кнопок "+/Штраф/Свой/Чужой" — юзер
+ * попросил всегда 100% ширины.
  */
 fun layoutFor(participantCount: Int): TileLayout = when (participantCount) {
-    2 -> TileLayout.SplitVertical
-    3, 4 -> TileLayout.Grid2x2
+    2, 3, 4 -> TileLayout.SplitVertical
     else -> TileLayout.VerticalList
 }
 
@@ -44,20 +46,6 @@ fun MatchLayout(
         ) {
             participants.forEach { p ->
                 Row(Modifier.fillMaxWidth().weight(1f)) { tileContent(p) }
-            }
-        }
-        TileLayout.Grid2x2 -> Column(
-            modifier.fillMaxSize().padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            participants.chunked(2).forEach { rowPair ->
-                Row(
-                    Modifier.fillMaxWidth().weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    rowPair.forEach { p -> Row(Modifier.weight(1f)) { tileContent(p) } }
-                    if (rowPair.size == 1) Row(Modifier.weight(1f)) {}
-                }
             }
         }
         TileLayout.VerticalList -> LazyColumn(

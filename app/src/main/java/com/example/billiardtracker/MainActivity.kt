@@ -25,7 +25,9 @@ import com.example.billiardtracker.di.AppContainer
 import com.example.billiardtracker.ui.components.UpdatePromptDialog
 import com.example.billiardtracker.ui.components.UpdateStage
 import com.example.billiardtracker.ui.nav.BilliardNavHost
+import com.example.billiardtracker.ui.theme.AppColorScheme
 import com.example.billiardtracker.ui.theme.BilliardTrackerTheme
+import androidx.compose.runtime.collectAsState
 import com.example.billiardtracker.util.ApkInstaller
 import com.example.billiardtracker.util.InstallResult
 import kotlinx.coroutines.launch
@@ -42,7 +44,13 @@ class MainActivity : ComponentActivity() {
         handleDeepLink(intent, container)
 
         setContent {
-            BilliardTrackerTheme {
+            // v1.24.0: тема из UserPrefs (5 палитр × dark/light). Меняется на лету.
+            val schemeKey by container.userPrefs.colorSchemeFlow.collectAsState(initial = "ORIGINAL")
+            val darkPref by container.userPrefs.darkThemeFlow.collectAsState(initial = true)
+            BilliardTrackerTheme(
+                scheme = AppColorScheme.fromKey(schemeKey),
+                darkTheme = darkPref,
+            ) {
                 var pending by remember { mutableStateOf<VersionDto?>(null) }
                 var stage by remember { mutableStateOf<UpdateStage>(UpdateStage.Idle) }
                 val scope = rememberCoroutineScope()

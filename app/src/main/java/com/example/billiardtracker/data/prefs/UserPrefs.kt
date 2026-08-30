@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -25,6 +26,9 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
     val enabledGameSlugsFlow: Flow<Set<String>> = dataStore.data.map {
         it[ENABLED_GAME_SLUGS] ?: ALL_SLUGS
     }
+    // v1.24.0: цветовая схема и dark/light. Дефолт — ORIGINAL + dark (как в v1.23.0).
+    val colorSchemeFlow: Flow<String> = dataStore.data.map { it[COLOR_SCHEME] ?: "ORIGINAL" }
+    val darkThemeFlow: Flow<Boolean> = dataStore.data.map { it[DARK_THEME] ?: true }
 
     suspend fun getToken(): String? = tokenFlow.first()
     suspend fun getUserId(): Long? = userIdFlow.first()
@@ -45,6 +49,14 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
             if (slugs == ALL_SLUGS) it.remove(ENABLED_GAME_SLUGS)
             else it[ENABLED_GAME_SLUGS] = slugs
         }
+    }
+
+    suspend fun setColorScheme(key: String) {
+        dataStore.edit { it[COLOR_SCHEME] = key }
+    }
+
+    suspend fun setDarkTheme(v: Boolean) {
+        dataStore.edit { it[DARK_THEME] = v }
     }
 
     suspend fun setPendingSharedToken(token: String?) {
@@ -111,6 +123,8 @@ class UserPrefs(private val dataStore: DataStore<Preferences>) {
         private val PENDING_SHARED_TOKEN = stringPreferencesKey("pending_shared_token")
         private val ENABLED_GAME_SLUGS = stringSetPreferencesKey("enabled_game_slugs")
         private val ID_REMAP = stringPreferencesKey("id_remap")
+        private val COLOR_SCHEME = stringPreferencesKey("color_scheme")
+        private val DARK_THEME = booleanPreferencesKey("dark_theme")
 
         fun create(context: Context): UserPrefs = UserPrefs(context.userDataStore)
     }

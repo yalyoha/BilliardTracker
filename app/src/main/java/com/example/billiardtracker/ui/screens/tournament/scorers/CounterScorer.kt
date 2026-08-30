@@ -14,11 +14,18 @@ import androidx.compose.ui.unit.dp
 import com.example.billiardtracker.domain.rules.RuleProfile
 
 /**
- * ±1 счётчик для дисциплин группы B (пирамиды с равноценными шарами).
- * `+`  → onShot(pid, kind="ball", ballNumber=null, pointsDelta=+1).
- * `−`  → onDecrement(pid); disabled когда currentScore == 0.
- * `Свояк` (если profile.allowsSvoiak) → onShot(pid, "svoiak", null, +1).
- * `Штраф` (всегда — «за борт» / промах биком) → onShot(pid, "foul", null, -1).
+ * v1.24.0 layout (по фидбеку юзера):
+ *   Row 1:  [    +    ] [ Штраф ]
+ *   Row 2:  [  Чужой ] [  Свой  ]
+ *
+ * Семантика:
+ *   `+`      → onShot(pid, "ball",   null, +1)   — быстрый +1
+ *   `Штраф`  → onDecrement(pid)                   — роль «−», удаляет последний
+ *              positive shot игрока; disabled при currentScore == 0.
+ *              Не создаёт shot с pointsDelta=-1 (иначе победитель определялся
+ *              бы «у кого меньше штрафа» — см. todo task 4).
+ *   `Чужой`  → onShot(pid, "ball",   null, +1)   — то же что "+"
+ *   `Свой`   → onShot(pid, "svoiak", null, +1)   — свояк (если profile.allowsSvoiak)
  */
 @Composable
 fun CounterScorer(
@@ -37,30 +44,28 @@ fun CounterScorer(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OutlinedButton(
-                onClick = { onDecrement(pid) },
-                enabled = currentScore > 0,
-                modifier = Modifier.weight(1f),
-            ) { Text("−", style = MaterialTheme.typography.headlineSmall) }
             Button(
                 onClick = { onShot(pid, "ball", null, +1) },
                 modifier = Modifier.weight(1f),
             ) { Text("+", style = MaterialTheme.typography.headlineSmall) }
+            OutlinedButton(
+                onClick = { onDecrement(pid) },
+                enabled = currentScore > 0,
+                modifier = Modifier.weight(1f),
+            ) { Text("Штраф") }
         }
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (profile.allowsSvoiak) {
-                OutlinedButton(
-                    onClick = { onShot(pid, "svoiak", null, +1) },
-                    modifier = Modifier.weight(1f),
-                ) { Text("Свояк") }
-            }
             OutlinedButton(
-                onClick = { onShot(pid, "foul", null, -1) },
+                onClick = { onShot(pid, "ball", null, +1) },
                 modifier = Modifier.weight(1f),
-            ) { Text("Штраф") }
+            ) { Text("Чужой") }
+            OutlinedButton(
+                onClick = { onShot(pid, if (profile.allowsSvoiak) "svoiak" else "ball", null, +1) },
+                modifier = Modifier.weight(1f),
+            ) { Text("Свой") }
         }
     }
 }

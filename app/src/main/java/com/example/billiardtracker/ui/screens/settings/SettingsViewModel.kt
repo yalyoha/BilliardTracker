@@ -60,6 +60,17 @@ class SettingsViewModel(
     val enabledGameSlugs: StateFlow<Set<String>> = userPrefs.enabledGameSlugsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), UserPrefs.ALL_SLUGS)
 
+    // v1.24.0: цветовая схема + dark/light. Меняются на лету — MainActivity
+    // подписывается на userPrefs.colorSchemeFlow/darkThemeFlow и рекомпозит
+    // BilliardTrackerTheme.
+    val colorScheme: StateFlow<String> = userPrefs.colorSchemeFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "ORIGINAL")
+    val darkTheme: StateFlow<Boolean> = userPrefs.darkThemeFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    fun setColorScheme(key: String) { viewModelScope.launch { userPrefs.setColorScheme(key) } }
+    fun setDarkTheme(v: Boolean) { viewModelScope.launch { userPrefs.setDarkTheme(v) } }
+
     fun setActiveToken(id: Long) {
         viewModelScope.launch { userPrefs.setActiveTokenId(id) }
     }

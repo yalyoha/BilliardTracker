@@ -81,7 +81,17 @@ class TournamentViewModel(
             val localUnsynced = _ui.value.games.filter { g ->
                 g.id < 0 && serverGames.none { it.orderIndex == g.orderIndex }
             }
-            val mergedGames = serverGames + localUnsynced
+            // Task 5 fix: если локально мы уже пометили игру как finished
+            // (клиент нажал «Партия окончена»), а сервер ещё не отдал
+            // обновление (finish_game op в outbox), — предпочитаем локальную
+            // версию с winnerParticipantId. Иначе refresh «размораживает»
+            // партию обратно в active, и 🏆 победитель пропадает из истории.
+            val localFinished: Map<Long, GameDto> = _ui.value.games
+                .filter { it.status == "finished" && it.winnerParticipantId != null }
+                .associateBy { it.id }
+            val mergedGames = serverGames.map { sg ->
+                localFinished[sg.id]?.takeIf { sg.status != "finished" || sg.winnerParticipantId == null } ?: sg
+            } + localUnsynced
             val currentLocal = _ui.value.currentGame
             val active = when {
                 // Если currentGame был локальный и sync прошёл — переключиться
@@ -193,6 +203,20 @@ class TournamentViewModel(
                         .thenByDescending { partIdOrder[it.participantId] ?: Int.MAX_VALUE },
                 )?.participantId
         }
+        // Task 5 fix: оптимистично помечаем партию finished + winner прямо
+        // в _ui. refresh() ниже потом смёржит с сервером; если сервер ещё не
+        // получил finish_game op (в outbox), нашу локальную версию оставит
+        // (см. refresh: localFinished-map). Иначе 2-я, 3-я и т.д. партии
+        // «мигали» — победитель появлялся только после SSE-эха.
+        val finishedGame = game.copy(
+            status = "finished",
+            winnerParticipantId = resolvedWinner,
+            finishedAt = System.currentTimeMillis(),
+        )
+        _ui.value = _ui.value.copy(
+            games = _ui.value.games.map { if (it.id == game.id) finishedGame else it },
+            currentGame = finishedGame,
+        )
         viewModelScope.launch {
             gameRepo.finishGame(tournamentId, game.id, resolvedWinner).onSuccess { refresh() }
         }
