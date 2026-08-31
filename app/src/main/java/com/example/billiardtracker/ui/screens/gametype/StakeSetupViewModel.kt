@@ -11,10 +11,12 @@ import com.example.billiardtracker.domain.rules.GameType
 import com.example.billiardtracker.domain.rules.RuleProfile
 import com.example.billiardtracker.domain.usecase.DetectClubUseCase
 import com.example.billiardtracker.ui.nav.NewTournamentState
+import com.example.billiardtracker.ui.nav.Team
 import com.example.billiardtracker.ui.nav.TeamState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -77,10 +79,18 @@ class StakeSetupViewModel(
         loadFromState()
         viewModelScope.launch { fetchNearbyAndAutoFill() }
         viewModelScope.launch { teamState.refresh() }
-        // Реактивно перезаполняем участников при смене активного состава.
+        // v1.24.6: реактивно на смену активного состава + правки в его игроках.
+        // Раньше collect срабатывал только на activeTeamId; если teams-список
+        // ещё не загрузился (refresh() параллельно летит), teamById() возвращал
+        // null и заполнение молча пропускалось — блок «Участники» оставался
+        // пустым до следующего тапа. Также adding player к активной команде
+        // не обновлял perParticipant. combine over (activeTeamId × teams) чинит
+        // оба кейса — эмитит при любом изменении.
         viewModelScope.launch {
-            teamState.activeTeamId.collect { id ->
-                if (id != null) fillParticipantsFromTeam(id)
+            combine(teamState.activeTeamId, teamState.teams) { id, teams ->
+                id?.let { active -> teams.firstOrNull { it.id == active } }
+            }.collect { team ->
+                if (team != null) mergeParticipantsFromTeam(team)
             }
         }
         // Подгружаем локальный профиль (name+phone) для кнопки «Добавить владельца».
@@ -113,13 +123,29 @@ class StakeSetupViewModel(
         )
     }
 
-    private fun fillParticipantsFromTeam(teamId: Long) {
-        val team = teamState.teamById(teamId) ?: return
-        _ui.value = _ui.value.copy(
-            perParticipant = team.players.map { m ->
-                ParticipantStakeUi(displayName = m.displayName, phone = m.phone)
-            },
-        )
+    /**
+     * v1.24.6: merge вместо replace. Держит handicap/override юзерских правок
+     * (совпадение по displayName+нормализованному phone) и extras — участников,
+     * добавленных руками (кнопкой «Добавить владельца телефона»), которых нет
+     * в составе. Иначе после add_player в активную команду затирались форы.
+     */
+    private fun mergeParticipantsFromTeam(team: Team) {
+        val digits: (String?) -> String = { it?.filter { c -> c.isDigit() }.orEmpty() }
+        val key: (String, String?) -> String = { n, p -> "$n|${digits(p)}" }
+        val teamKeys = team.players.map { key(it.displayName, it.phone) }.toSet()
+        val prev = _ui.value.perParticipant
+        val extras = prev.filter { key(it.displayName, it.phone) !in teamKeys }
+        val fromTeam = team.players.map { m ->
+            val k = key(m.displayName, m.phone)
+            val old = prev.firstOrNull { key(it.displayName, it.phone) == k }
+            ParticipantStakeUi(
+                displayName = m.displayName,
+                phone = m.phone,
+                handicapPoints = old?.handicapPoints ?: 0,
+                overrideRub = old?.overrideRub.orEmpty(),
+            )
+        }
+        _ui.value = _ui.value.copy(perParticipant = fromTeam + extras)
     }
 
     /**
