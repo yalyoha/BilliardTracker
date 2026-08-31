@@ -172,15 +172,33 @@ class TournamentRepository(
     }
 
     /**
-     * Скрыть встречу из «Идут сейчас». Помечаем статус local_hidden — при следующем
-     * refreshMine() встреча придёт с сервера, но будет удалена снова (см. refreshMine).
+     * Удалить встречу из UI и с сервера.
+     * Локальная (id < 0): отменяем pending ops, удаляем из DB сразу.
+     * Серверная (id > 0): помечаем local_hidden (чтобы не мигала до ответа) +
+     * ставим DELETE в outbox. После подтверждения сервером refreshMine() уберёт её.
      */
     suspend fun deleteLocal(id: Long) {
-        val entity = tournamentDao.getById(id)
-        if (entity != null) {
-            tournamentDao.upsert(entity.copy(status = "local_hidden"))
-        } else {
+        val entity = tournamentDao.getById(id) ?: return
+        if (id < 0) {
+            outboxDao?.let { dao ->
+                dao.pendingOps()
+                    .filter { it.localTournamentId == id }
+                    .forEach { dao.update(it.copy(executed = true, lastError = "cancelled: tournament deleted")) }
+            }
             tournamentDao.deleteById(id)
+        } else {
+            tournamentDao.upsert(entity.copy(status = "local_hidden"))
+            outboxDao?.insert(
+                OutboxOpEntity(
+                    kind = "delete_tournament",
+                    payloadJson = "",
+                    endpoint = "api/tournaments/$id",
+                    method = "DELETE",
+                    localTournamentId = id,
+                    createdAt = System.currentTimeMillis(),
+                )
+            )
+            syncManager?.kickDrain()
         }
     }
 

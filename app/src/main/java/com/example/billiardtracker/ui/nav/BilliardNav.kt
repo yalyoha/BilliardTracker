@@ -433,6 +433,7 @@ private fun PendingOpsDialog(
 
 private fun kindLabel(kind: String) = when (kind) {
     "create_tournament" -> "Создание встречи"
+    "delete_tournament" -> "Удаление встречи"
     "start_game"        -> "Начало игры"
     "finish_game"       -> "Завершение игры"
     "finish_tournament" -> "Завершение встречи"

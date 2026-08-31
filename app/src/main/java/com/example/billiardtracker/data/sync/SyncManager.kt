@@ -225,6 +225,7 @@ class SyncManager(
         val tokenId = op.masterTokenId
         return when (op.kind) {
             "create_tournament" -> "api/tournaments"
+            "delete_tournament" -> "api/tournaments/$realTid"
             "start_game" -> "api/tournaments/$realTid/games"
             "finish_game" -> "api/tournaments/$realTid/games/$realGid/finish"
             "finish_tournament" -> "api/tournaments/$realTid/finish"
@@ -335,6 +336,11 @@ class SyncManager(
         when (op.kind) {
             "finish_game", "finish_tournament", "delete_shot",
             "rename_team", "delete_team", "delete_team_member" -> {}
+            "delete_tournament" -> {
+                // Сервер подтвердил удаление — убираем local_hidden tombstone из DB.
+                val tid = op.localTournamentId ?: return
+                if (tid > 0) tournamentDao.deleteById(tid)
+            }
             "create_team" -> {
                 val localTeamId = op.localTeamId ?: return
                 if (localTeamId >= 0) return
