@@ -370,6 +370,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                 PendingOpsDialog(
                     ops = pendingOps,
                     onDismiss = { showPendingDialog = false },
+                    onRetry = { container.syncManager.kickDrain() },
                 )
             }
         }
@@ -380,6 +381,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
 private fun PendingOpsDialog(
     ops: List<OutboxOpEntity>,
     onDismiss: () -> Unit,
+    onRetry: () -> Unit = {},
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -422,6 +424,9 @@ private fun PendingOpsDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("Закрыть") }
+        },
+        dismissButton = {
+            TextButton(onClick = { onRetry(); onDismiss() }) { Text("Повторить") }
         },
     )
 }

@@ -399,6 +399,17 @@ class SyncManager(
                         responseBody,
                     )
                 }.getOrNull() ?: return
+                // Маппинг и каскад outbox-ops ставим ДО проверки entity: если
+                // refreshMine() вызвал deleteAll() между enqueue и onSuccess,
+                // entity уже нет в базе, но remap должен быть сохранён, иначе
+                // start_game застрянет с 0 попыток навсегда (resolveEndpoint → null).
+                tournamentIdRemap[localTid] = serverT.id
+                persistRemap()
+                gameDao.remapTournamentId(oldTid = localTid, newTid = serverT.id)
+                outboxDao.pendingOps()
+                    .filter { it.localTournamentId == localTid }
+                    .forEach { outboxDao.update(it.copy(localTournamentId = serverT.id)) }
+                devlog("tournament-remap", payload = mapOf("local" to localTid, "server" to serverT.id))
                 val local = tournamentDao.getById(localTid) ?: return
                 val now = System.currentTimeMillis()
                 // Replace tournament: delete local + insert with server id.
@@ -467,17 +478,6 @@ class SyncManager(
                     // GameRepository.addShot → SyncManager.resolveParticipantId.
                     participantIdRemap[oldPid] = newPid
                 }
-                // Cascade: games.tournamentId + pending outbox ops.
-                gameDao.remapTournamentId(oldTid = localTid, newTid = serverT.id)
-                outboxDao.pendingOps()
-                    .filter { it.localTournamentId == localTid }
-                    .forEach { outboxDao.update(it.copy(localTournamentId = serverT.id)) }
-                // In-memory + persistent fallback: если ViewModel держит stale
-                // localTid и после нашего delete+insert зэнкью start_game/add_shot
-                // с этим localTid, DAO.getById вернёт null → gridlock. Consult map.
-                tournamentIdRemap[localTid] = serverT.id
-                persistRemap()
-                devlog("tournament-remap", payload = mapOf("local" to localTid, "server" to serverT.id))
             }
             "start_game" -> {
                 // Сервер вернул Game{id: <serverId>}. Заменяем локальный

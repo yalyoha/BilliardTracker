@@ -109,13 +109,18 @@ class GameRepository(
                 else Result.failure(IllegalStateException("HTTP ${r.code()}"))
             } catch (e: Exception) { Result.failure(e) }
         }
+        // Если ViewModel держит локальный (отрицательный) ID встречи, но
+        // create_tournament уже синкнулась и маппинг в памяти есть — берём
+        // серверный ID сразу. Иначе resolveEndpoint застрянет с 0 попыток
+        // если entity удалена deleteAll() до выполнения start_game.
+        val effectiveTid = if (tid < 0) syncManager?.resolveTournamentId(tid) ?: tid else tid
         val localId = nextLocalId()
         val now = System.currentTimeMillis()
-        val existing = games.observeByTournament(tid).first()
+        val existing = games.observeByTournament(effectiveTid).first()
         val nextOrder = (existing.maxOfOrNull { it.orderIndex } ?: 0) + 1
         val local = GameEntity(
             id = localId,
-            tournamentId = tid,
+            tournamentId = effectiveTid,
             orderIndex = nextOrder,
             status = "active",
             startedAt = now,
@@ -129,9 +134,9 @@ class GameRepository(
             OutboxOpEntity(
                 kind = "start_game",
                 payloadJson = "{}",
-                endpoint = "api/tournaments/$tid/games",
+                endpoint = "api/tournaments/$effectiveTid/games",
                 method = "POST",
-                localTournamentId = tid,
+                localTournamentId = effectiveTid,
                 localGameId = localId,
                 createdAt = now,
             )
@@ -140,7 +145,7 @@ class GameRepository(
         return Result.success(
             GameDto(
                 id = localId,
-                tournamentId = tid,
+                tournamentId = effectiveTid,
                 orderIndex = nextOrder,
                 status = "active",
                 startedAt = now,
