@@ -295,6 +295,14 @@ class StakeSetupViewModel(
             _ui.value = _ui.value.copy(error = "Нет игроков — выбери или создай состав ниже")
             return
         }
+        if (_ui.value.perParticipant.size < 2) {
+            val msg = if (!_ui.value.ownerAlreadyIn)
+                "Нужно минимум 2 игрока — нажми «Добавить себя» чтобы присоединиться"
+            else
+                "Нужно минимум 2 игрока — добавь второго участника в состав"
+            _ui.value = _ui.value.copy(error = msg)
+            return
+        }
         val moneyKop = _ui.value.stakeRub.toLongOrNull()?.times(100)
         _ui.value = _ui.value.copy(loading = true, error = null)
         viewModelScope.launch {
