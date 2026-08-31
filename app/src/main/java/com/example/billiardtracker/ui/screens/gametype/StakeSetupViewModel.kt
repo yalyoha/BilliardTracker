@@ -124,18 +124,21 @@ class StakeSetupViewModel(
     }
 
     /**
-     * v1.24.8: perParticipant всегда 1:1 отражает team.players активного
-     * состава. Владелец теперь тоже team-member (кнопка «Добавить себя»
-     * персистит через teamState.addPlayer), поэтому extras больше нет.
-     *
-     * Handicap/overrideRub переносятся, если тот же игрок (displayName+phone)
-     * нашёлся в новом составе — иначе значения по умолчанию.
+     * Синхронизирует perParticipant с игроками активного состава.
+     * Владелец телефона (ownerPhone) ИСКЛЮЧАЕТСЯ из автозаполнения — он
+     * появляется только при явном нажатии «Добавить себя». Если в текущей
+     * сессии владелец уже был добавлен (есть в prev), он сохраняется в конце
+     * списка.
      */
     private fun mergeParticipantsFromTeam(team: Team) {
         val digits: (String?) -> String = { it?.filter { c -> c.isDigit() }.orEmpty() }
         val key: (String, String?) -> String = { n, p -> "$n|${digits(p)}" }
+        val ownerDigits = digits(_ui.value.ownerPhone)
         val prev = _ui.value.perParticipant
-        val fromTeam = team.players.map { m ->
+        val nonOwnerPlayers = team.players.filter { m ->
+            ownerDigits.isEmpty() || digits(m.phone) != ownerDigits
+        }
+        val fromTeam = nonOwnerPlayers.map { m ->
             val k = key(m.displayName, m.phone)
             val old = prev.firstOrNull { key(it.displayName, it.phone) == k }
             ParticipantStakeUi(
@@ -145,7 +148,10 @@ class StakeSetupViewModel(
                 overrideRub = old?.overrideRub.orEmpty(),
             )
         }
-        _ui.value = _ui.value.copy(perParticipant = fromTeam)
+        val teamKeys = fromTeam.map { key(it.displayName, it.phone) }.toSet()
+        // Сохраняем участников, которых нет в команде (напр. владелец, добавленный в этой сессии).
+        val extras = prev.filter { key(it.displayName, it.phone) !in teamKeys }
+        _ui.value = _ui.value.copy(perParticipant = fromTeam + extras)
     }
 
     /**
@@ -211,13 +217,11 @@ class StakeSetupViewModel(
     }
 
     /**
-     * v1.24.8: opt-in-добавление владельца ПРЯМО в активный состав через
-     * teamState.addPlayer → outbox → persist. До этого было только в
-     * perParticipant (temporary UI-list) — при пересоздании ViewModel
-     * или переключении составов владелец пропадал.
-     *
-     * combine(activeTeamId, teams) в init автоматически подтянет владельца
-     * в perParticipant после успешного addPlayer.
+     * Добавляет владельца телефона в Участники и сохраняет в активный состав.
+     * В perParticipant добавляется сразу (оптимистично). В команду записывается
+     * только если его там ещё нет — чтобы не было дублей.
+     * При следующей встрече владелец в команде будет, но mergeParticipantsFromTeam
+     * его игнорирует (по номеру телефона) — он появится только при нажатии кнопки.
      */
     fun addOwnerAsParticipant() {
         val name = _ui.value.ownerName.ifBlank { "Я" }
@@ -227,25 +231,49 @@ class StakeSetupViewModel(
             _ui.value = _ui.value.copy(error = "Сначала выбери или создай состав")
             return
         }
-        viewModelScope.launch {
-            teamState.addPlayer(teamId, name, phone).onFailure { e ->
-                _ui.value = _ui.value.copy(error = e.message ?: "Не удалось добавить владельца")
+        _ui.value = _ui.value.copy(
+            perParticipant = _ui.value.perParticipant + ParticipantStakeUi(
+                displayName = name,
+                phone = phone,
+            )
+        )
+        val ownerDigits = phone?.filter { it.isDigit() }.orEmpty()
+        val team = teamState.teamById(teamId)
+        val alreadyInTeam = team != null && ownerDigits.isNotEmpty() &&
+            team.players.any { it.phone?.filter { c -> c.isDigit() }.orEmpty() == ownerDigits }
+        if (!alreadyInTeam) {
+            viewModelScope.launch {
+                teamState.addPlayer(teamId, name, phone).onFailure { e ->
+                    _ui.value = _ui.value.copy(error = e.message ?: "Не удалось добавить владельца")
+                }
             }
         }
     }
 
     /**
-     * Убрать участника по индексу — удаляет member'а из активного состава
-     * (teamState.removePlayerAt → outbox). Т.к. perParticipant теперь =
-     * team.players (после v1.24.7 fix), индексы совпадают.
+     * Убрать участника по индексу.
+     * Если idx входит в диапазон игроков команды — удаляет из состава (persist).
+     * Если это «экстра» (владелец, добавленный кнопкой) — убирает только из
+     * perParticipant без изменения команды.
      */
     fun removeParticipant(idx: Int) {
-        val teamId = teamState.activeTeamId.value ?: return
-        val team = teamState.teamById(teamId) ?: return
-        if (idx !in team.players.indices) return
-        viewModelScope.launch {
-            teamState.removePlayerAt(teamId, idx).onFailure { e ->
-                _ui.value = _ui.value.copy(error = e.message ?: "Не удалось убрать игрока")
+        val teamId = teamState.activeTeamId.value
+        val team = if (teamId != null) teamState.teamById(teamId) else null
+        val ownerDigits = _ui.value.ownerPhone?.filter { it.isDigit() }.orEmpty()
+        val nonOwnerSize = team?.players
+            ?.filter { ownerDigits.isEmpty() || it.phone?.filter { c -> c.isDigit() }.orEmpty() != ownerDigits }
+            ?.size ?: 0
+        if (team != null && teamId != null && idx < nonOwnerSize) {
+            viewModelScope.launch {
+                teamState.removePlayerAt(teamId, idx).onFailure { e ->
+                    _ui.value = _ui.value.copy(error = e.message ?: "Не удалось убрать игрока")
+                }
+            }
+        } else {
+            val list = _ui.value.perParticipant.toMutableList()
+            if (idx in list.indices) {
+                list.removeAt(idx)
+                _ui.value = _ui.value.copy(perParticipant = list)
             }
         }
     }
