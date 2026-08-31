@@ -43,11 +43,6 @@ import com.example.billiardtracker.ui.theme.RetroFlame
 import com.example.billiardtracker.ui.theme.RetroIndigo
 import com.example.billiardtracker.ui.theme.RetroLime
 import com.example.billiardtracker.ui.theme.RetroTeal
-import com.example.billiardtracker.ui.theme.VividBlue
-import com.example.billiardtracker.ui.theme.VividGreen
-import com.example.billiardtracker.ui.theme.VividOrange
-import com.example.billiardtracker.ui.theme.VividRed
-import com.example.billiardtracker.ui.theme.VividSand
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -575,7 +570,6 @@ private fun swatchesFor(s: AppColorScheme, dark: Boolean): List<ComposeColor> = 
     AppColorScheme.EARTH -> listOf(EarthKhaki, EarthTaupe, EarthAshBrown, EarthDim, EarthPlum)
     AppColorScheme.PERIWINKLE -> listOf(PeriLight, PeriMain, PeriLavender, PeriDim, PeriDark)
     AppColorScheme.RETRO -> listOf(RetroCrimson, RetroFlame, RetroIndigo, RetroTeal, RetroLime)
-    AppColorScheme.VIVID -> listOf(VividGreen, VividRed, VividOrange, VividBlue, VividSand)
 }
 
 private fun pluralVstrech(n: Int): String {

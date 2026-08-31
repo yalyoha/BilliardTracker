@@ -21,8 +21,7 @@ enum class AppColorScheme(val displayName: String) {
     ORIGINAL("Сукно (original)"),
     EARTH("Кофе"),
     PERIWINKLE("Лотус"),
-    RETRO("Ярко №1"),
-    VIVID("Ярко №2"),
+    RETRO("Маракуйя"),
     ;
     companion object {
         fun fromKey(key: String?): AppColorScheme = entries.firstOrNull { it.name == key } ?: ORIGINAL
@@ -223,62 +222,9 @@ private val RetroLight = lightColorScheme(
     outlineVariant = RetroTeal,
 )
 
-// --- VIVID / «Ярко №2» ------------------------------------------------
-// Юзерская правка: жёлтый фон + красные плашки/кнопки + зелёный/синий
-// акцентами. Раньше было всё зелёное (primary=VividGreen) — не «ярко».
-
-private val VividDark = darkColorScheme(
-    // Плашки (Card/Button) — красный, кнопки-акцент — тоже красный.
-    primary = VividRed,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFA02128),
-    onPrimaryContainer = Color.White,
-    // Секондари/третиари — синий + зелёный, чтобы палитра «играла».
-    secondary = VividBlue,
-    onSecondary = Color.White,
-    tertiary = VividGreen,
-    onTertiary = Color.White,
-    // Фон — насыщенный жёлто-оранжевый (юзер: «фон надо жёлтый»); в dark-варианте
-    // чуть глубже light'а, чтобы белые текстовые надписи не слепили.
-    background = Color(0xFFE09A00),
-    onBackground = Color(0xFF2A1A00),
-    surface = VividRed,
-    onSurface = Color.White,
-    surfaceVariant = Color(0xFF8B1A22),
-    onSurfaceVariant = Color(0xFFFFDCD8),
-    // TopBar/NavBar — темнее чем background чтобы визуально отделить header.
-    surfaceContainer = Color(0xFFB37A08),
-    surfaceContainerHigh = Color(0xFFC9860E),
-    surfaceContainerHighest = Color(0xFFDE9200),
-    error = Color(0xFFB00020),
-    onError = Color.White,
-    outline = VividGreen,
-    outlineVariant = Color(0xFF8B1A22),
-)
-
-private val VividLight = lightColorScheme(
-    primary = VividRed,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFFF6B72),
-    onPrimaryContainer = Color(0xFF3A0004),
-    secondary = VividBlue,
-    onSecondary = Color.White,
-    tertiary = VividGreen,
-    onTertiary = Color.White,
-    background = VividOrange,
-    onBackground = Color(0xFF3A2000),
-    surface = VividRed,
-    onSurface = Color.White,
-    surfaceVariant = Color(0xFFFFB74D),
-    onSurfaceVariant = Color(0xFF3A2000),
-    surfaceContainer = Color(0xFFFFC947),
-    surfaceContainerHigh = Color(0xFFFFB60F),
-    surfaceContainerHighest = Color(0xFFE99A00),
-    error = Color(0xFFB00020),
-    onError = Color.White,
-    outline = VividGreen,
-    outlineVariant = Color(0xFFFFCC80),
-)
+// VIVID палитра удалена в v1.24.3 — юзеру не понравилось «ярко №2».
+// Константы VividGreen/Red/Orange/Blue/Sand остались в Color.kt для истории;
+// после стабилизации палитр можно удалить.
 
 @Composable
 fun BilliardTrackerTheme(
@@ -291,7 +237,6 @@ fun BilliardTrackerTheme(
         AppColorScheme.EARTH -> if (darkTheme) EarthDark else EarthLight
         AppColorScheme.PERIWINKLE -> if (darkTheme) PeriwinkleDark else PeriwinkleLight
         AppColorScheme.RETRO -> if (darkTheme) RetroDark else RetroLight
-        AppColorScheme.VIVID -> if (darkTheme) VividDark else VividLight
     }
     MaterialTheme(
         colorScheme = colors,
