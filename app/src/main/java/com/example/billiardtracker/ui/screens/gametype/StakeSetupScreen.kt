@@ -138,10 +138,52 @@ fun StakeSetupScreen(
             )
 
             HorizontalDivider()
+
+            // === Составы — inline picker + editor ===
+            Text("Составы", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Тап по составу — выбрать активный. Иконка «карандаш» — редактировать.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (teams.isEmpty()) {
+                Text(
+                    "Ещё нет составов. Создай первый — с ним стартует встреча.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                teams.forEach { team ->
+                    InlineTeamCard(
+                        team = team,
+                        isActive = team.id == activeTeamId,
+                        expanded = team.id == teamUi.expandedTeamId,
+                        ui = teamUi,
+                        onSetActive = { teamViewModel.setActive(team.id) },
+                        onExpand = { teamViewModel.expandTeam(team.id) },
+                        onCollapse = teamViewModel::collapseTeam,
+                        onRename = { teamToRename = team },
+                        onDelete = { teamToDelete = team },
+                        onAddPlayer = { teamViewModel.addPlayer(team.id) },
+                        onRemovePlayer = { idx -> teamViewModel.removePlayer(team.id, idx) },
+                        onNameDraft = teamViewModel::setNameDraft,
+                        onPhoneDraft = teamViewModel::setPhoneDraft,
+                        onPickContact = teamViewModel::pickContact,
+                        onRequestContacts = {
+                            contactsLauncher.launch(Manifest.permission.READ_CONTACTS)
+                        },
+                    )
+                }
+            }
+            Button(
+                onClick = { showCreateTeamDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Создать состав") }
+
+            HorizontalDivider()
             Text("Участники (фора и индивидуальная ставка)", style = MaterialTheme.typography.titleSmall)
             if (ui.perParticipant.isEmpty()) {
                 Text(
-                    "Ниже выбери состав — или создай новый.",
+                    "Выбери состав выше — участники появятся здесь.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -183,9 +225,6 @@ fun StakeSetupScreen(
                     }
                 }
             }
-            // v1.24.0 (task 1): владелец больше не добавляется автоматически —
-            // тапаем «Добавить владельца телефона», если он играет. Скрыта,
-            // если владелец уже в списке (совпадение по phone).
             if (!ui.ownerAlreadyIn) {
                 OutlinedButton(
                     onClick = viewModel::addOwnerAsParticipant,
@@ -196,48 +235,6 @@ fun StakeSetupScreen(
                     Text(label)
                 }
             }
-
-            HorizontalDivider()
-
-            // === Составы — inline picker + editor ===
-            Text("Составы", style = MaterialTheme.typography.titleSmall)
-            Text(
-                "Тап по составу — выбрать активный. Иконка «карандаш» — редактировать.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (teams.isEmpty()) {
-                Text(
-                    "Ещё нет составов. Создай первый — с ним стартует встреча.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            } else {
-                teams.forEach { team ->
-                    InlineTeamCard(
-                        team = team,
-                        isActive = team.id == activeTeamId,
-                        expanded = team.id == teamUi.expandedTeamId,
-                        ui = teamUi,
-                        onSetActive = { teamViewModel.setActive(team.id) },
-                        onExpand = { teamViewModel.expandTeam(team.id) },
-                        onCollapse = teamViewModel::collapseTeam,
-                        onRename = { teamToRename = team },
-                        onDelete = { teamToDelete = team },
-                        onAddPlayer = { teamViewModel.addPlayer(team.id) },
-                        onRemovePlayer = { idx -> teamViewModel.removePlayer(team.id, idx) },
-                        onNameDraft = teamViewModel::setNameDraft,
-                        onPhoneDraft = teamViewModel::setPhoneDraft,
-                        onPickContact = teamViewModel::pickContact,
-                        onRequestContacts = {
-                            contactsLauncher.launch(Manifest.permission.READ_CONTACTS)
-                        },
-                    )
-                }
-            }
-            Button(
-                onClick = { showCreateTeamDialog = true },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Создать состав") }
 
             if (ui.error != null) {
                 Text(ui.error!!, color = MaterialTheme.colorScheme.error)
