@@ -124,17 +124,20 @@ class StakeSetupViewModel(
     }
 
     /**
-     * v1.24.6: merge вместо replace. Держит handicap/override юзерских правок
-     * (совпадение по displayName+нормализованному phone) и extras — участников,
-     * добавленных руками (кнопкой «Добавить владельца телефона»), которых нет
-     * в составе. Иначе после add_player в активную команду затирались форы.
+     * v1.24.7: заменяем perParticipant полностью на игроков активного состава.
+     * Единственное исключение — владелец телефона, добавленный кнопкой
+     * «Добавить владельца телефона»: он не привязан к конкретному составу и
+     * должен переживать переключения. Всё остальное (в т.ч. игроки, ранее
+     * подтянутые из старого состава) — вычищаем, чтобы в список не попадали
+     * участники «из всех составов сразу» (баг v1.24.6).
+     *
+     * Handicap/overrideRub переносятся между итерациями, если в новом составе
+     * нашёлся тот же игрок по displayName+phone — иначе значения по умолчанию.
      */
     private fun mergeParticipantsFromTeam(team: Team) {
         val digits: (String?) -> String = { it?.filter { c -> c.isDigit() }.orEmpty() }
         val key: (String, String?) -> String = { n, p -> "$n|${digits(p)}" }
-        val teamKeys = team.players.map { key(it.displayName, it.phone) }.toSet()
         val prev = _ui.value.perParticipant
-        val extras = prev.filter { key(it.displayName, it.phone) !in teamKeys }
         val fromTeam = team.players.map { m ->
             val k = key(m.displayName, m.phone)
             val old = prev.firstOrNull { key(it.displayName, it.phone) == k }
@@ -145,7 +148,14 @@ class StakeSetupViewModel(
                 overrideRub = old?.overrideRub.orEmpty(),
             )
         }
-        _ui.value = _ui.value.copy(perParticipant = fromTeam + extras)
+        // Владелец опционально в конце — только если его нет в новом составе.
+        val ownerDigits = _ui.value.ownerPhone?.let(digits)
+        val ownerAlreadyInTeam = ownerDigits != null &&
+            team.players.any { digits(it.phone) == ownerDigits }
+        val ownerExtra = if (ownerDigits != null && !ownerAlreadyInTeam) {
+            prev.firstOrNull { digits(it.phone) == ownerDigits }
+        } else null
+        _ui.value = _ui.value.copy(perParticipant = fromTeam + listOfNotNull(ownerExtra))
     }
 
     /**
