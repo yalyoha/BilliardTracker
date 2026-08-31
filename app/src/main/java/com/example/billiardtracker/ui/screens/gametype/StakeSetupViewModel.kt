@@ -154,9 +154,11 @@ class StakeSetupViewModel(
             )
         }
         val teamKeys = fromTeam.map { key(it.displayName, it.phone) }.toSet()
-        // Сохраняем участников, которых нет в команде (напр. владелец, добавленный в этой сессии).
-        val extras = prev.filter { key(it.displayName, it.phone) !in teamKeys }
-        _ui.value = _ui.value.copy(perParticipant = fromTeam + extras)
+        // При смене состава очищаем всё, кроме владельца если он добавлен в этой сессии.
+        val ownerExtra = if (ownerDigits.isNotEmpty())
+            prev.firstOrNull { digits(it.phone) == ownerDigits && key(it.displayName, it.phone) !in teamKeys }
+        else null
+        _ui.value = _ui.value.copy(perParticipant = if (ownerExtra != null) fromTeam + ownerExtra else fromTeam)
     }
 
     /**

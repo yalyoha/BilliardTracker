@@ -167,6 +167,11 @@ class TournamentRepository(
         )
     }
 
+    /** Локальное удаление встречи (только из Room). Встреча пропадёт из «Идут сейчас». */
+    suspend fun deleteLocal(id: Long) {
+        tournamentDao.deleteById(id)
+    }
+
     /**
      * Offline-first create. Локально: TournamentEntity + Participants с
      * negative IDs. Enqueue op. При sync — SyncManager делает cascade
