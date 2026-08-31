@@ -1,0 +1,172 @@
+name: Build and release APK
+
+# Триггер: push тега vX.Y.Z (создаётся ботом через `gh release create v1.24.9`),
+# либо ручной запуск.
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег для сборки (например v1.24.9)'
+        required: true
+
+# Один активный build на тег.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # для gh release upload и создания release
+      # id-token — не нужен, deploy идёт через SSH
+
+    steps:
+      - name: Определить тег
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF##*/}"
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::TAG '$TAG' не в формате vX.Y.Z"
+            exit 1
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "versionName=${TAG#v}" >> $GITHUB_OUTPUT
+
+      - name: Checkout на тег
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Расшифровать keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::secret KEYSTORE_BASE64 не задан. Запусти bin/.deploy/setup-android-ci.mjs"
+            exit 1
+          fi
+          mkdir -p "$HOME/.keystores"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$HOME/.keystores/billiardtracker.keystore"
+          test -s "$HOME/.keystores/billiardtracker.keystore" || { echo "::error::keystore пустой"; exit 1; }
+          echo "BT_KEYSTORE_PATH=$HOME/.keystores/billiardtracker.keystore" >> $GITHUB_ENV
+
+      - name: Сборка release APK
+        env:
+          BT_KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'billiardtracker' }}
+          BT_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          BT_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Достать versionCode / versionName / sha256
+        id: apk
+        run: |
+          VN=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          VC=$(grep -oP 'versionCode\s*=\s*\K\d+' app/build.gradle.kts)
+          APK=app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$APK" ]; then
+            echo "::error::APK не найден: $APK"
+            exit 1
+          fi
+          SHA=$(sha256sum "$APK" | cut -d' ' -f1)
+          SIZE=$(stat -c%s "$APK")
+          # Sanity: versionName в build.gradle должен совпадать с тегом.
+          if [ "v$VN" != "${{ steps.tag.outputs.tag }}" ]; then
+            echo "::error::versionName в build.gradle ($VN) не совпадает с тегом (${{ steps.tag.outputs.tag }})"
+            exit 1
+          fi
+          echo "versionCode=$VC"  >> $GITHUB_OUTPUT
+          echo "versionName=$VN"  >> $GITHUB_OUTPUT
+          echo "sha256=$SHA"      >> $GITHUB_OUTPUT
+          echo "sizeBytes=$SIZE"  >> $GITHUB_OUTPUT
+          echo "apkPath=$APK"     >> $GITHUB_OUTPUT
+          echo "APK $VN (code $VC): $(numfmt --to=iec-i --suffix=B $SIZE), sha256=${SHA:0:12}…"
+
+      - name: Собрать version.json
+        run: |
+          cat > version.json <<JSON
+          {
+            "versionCode": ${{ steps.apk.outputs.versionCode }},
+            "versionName": "${{ steps.apk.outputs.versionName }}",
+            "apkUrl": "https://billiardtracker.alekseylosev.ru/billiardtracker.apk",
+            "sha256": "${{ steps.apk.outputs.sha256 }}",
+            "sizeBytes": ${{ steps.apk.outputs.sizeBytes }},
+            "releasedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "changelog": ""
+          }
+          JSON
+          cat version.json
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Deploy APK + version.json → VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VN: ${{ steps.apk.outputs.versionName }}
+          APK: ${{ steps.apk.outputs.apkPath }}
+        run: |
+          set -e
+          REMOTE="$VPS_USER@$VPS_HOST"
+          # accept-new — первый раз добавляем hostkey; strict-check предотвращает MITM в будущем.
+          SSH="ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
+          SCP="scp -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
+
+          $SSH "$REMOTE" "mkdir -p /srv/billiardtracker/releases/v${VN}"
+          $SCP "$APK" "$REMOTE:/srv/billiardtracker/releases/v${VN}/billiardtracker.apk"
+          $SCP version.json "$REMOTE:/srv/billiardtracker/releases/v${VN}/version.json"
+
+          # Обновляем latest симлинк — auto-updater телефона смотрит на него.
+          $SSH "$REMOTE" "rm -rf /srv/billiardtracker/releases/latest && ln -s /srv/billiardtracker/releases/v${VN} /srv/billiardtracker/releases/latest"
+
+          # Cleanup — оставляем ТОЛЬКО текущий (правило latest-only).
+          $SSH "$REMOTE" "cd /srv/billiardtracker/releases && for d in v*; do [ \"\$d\" = \"v${VN}\" ] && continue; rm -rf \"\$d\"; done"
+
+          echo "✓ https://billiardtracker.alekseylosev.ru/billiardtracker.apk"
+          echo "✓ https://billiardtracker.alekseylosev.ru/version.json"
+
+      - name: Attach APK к GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          APK: ${{ steps.apk.outputs.apkPath }}
+        run: |
+          # Release уже создан ботом через `gh release create` — просто добавляем APK-asset.
+          # Если release нет (workflow_dispatch случай) — создаём с auto-notes.
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG не найден — создаём с auto-notes"
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
+          cp "$APK" "billiardtracker-${TAG}.apk"
+          gh release upload "$TAG" "billiardtracker-${TAG}.apk" --clobber
+
+      - name: Cleanup — удалить старые GH releases (latest-only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          gh release list --limit 100 --json tagName --jq '.[].tagName' \
+            | grep -v "^${TAG}$" \
+            | while read old; do
+                [ -z "$old" ] && continue
+                echo "Удаляю старый release: $old"
+                gh release delete "$old" --yes --cleanup-tag || true
+              done
