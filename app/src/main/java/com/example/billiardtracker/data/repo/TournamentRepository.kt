@@ -48,8 +48,12 @@ class TournamentRepository(
                     serverId = it.id,
                 )
             }
+            // Запоминаем ID встреч, скрытых пользователем, до удаления таблицы.
+            val hiddenIds = tournamentDao.hiddenServerIds().toSet()
             tournamentDao.deleteAll()
             tournamentDao.upsertAll(entities)
+            // Повторно удаляем скрытые — они пришли с сервера, но пользователь убрал их вручную.
+            hiddenIds.forEach { tournamentDao.deleteById(it) }
             Result.success(Unit)
         }
     } catch (e: Exception) {
@@ -167,9 +171,17 @@ class TournamentRepository(
         )
     }
 
-    /** Локальное удаление встречи (только из Room). Встреча пропадёт из «Идут сейчас». */
+    /**
+     * Скрыть встречу из «Идут сейчас». Помечаем статус local_hidden — при следующем
+     * refreshMine() встреча придёт с сервера, но будет удалена снова (см. refreshMine).
+     */
     suspend fun deleteLocal(id: Long) {
-        tournamentDao.deleteById(id)
+        val entity = tournamentDao.getById(id)
+        if (entity != null) {
+            tournamentDao.upsert(entity.copy(status = "local_hidden"))
+        } else {
+            tournamentDao.deleteById(id)
+        }
     }
 
     /**
