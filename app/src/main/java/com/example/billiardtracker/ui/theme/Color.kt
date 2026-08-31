@@ -48,10 +48,19 @@ val RetroTeal = Color(0xFF1B998B)      // Verdigris
 val RetroLime = Color(0xFFC5D86D)      // Lime Cream
 
 // =====================================================================
-//  VIVID — img_3.png (Jungle Green / Pacific Blue). Радужная.
+//  PURE DARK — «Тёмная» тема (v1.24.4+). 5 near-blacks + белый текст.
 // =====================================================================
-val VividGreen = Color(0xFF44AF69)     // Jungle Green
-val VividRed = Color(0xFFF8333C)       // Strawberry Red
-val VividOrange = Color(0xFFFCAB10)    // Orange
-val VividBlue = Color(0xFF2B9EB3)      // Pacific Blue
-val VividSand = Color(0xFFDBD5B5)      // Sand Dune
+val PureBlack1 = Color(0xFF0A0A0A)   // background — чернее чёрного
+val PureBlack2 = Color(0xFF1A1A1A)   // surface (Card)
+val PureBlack3 = Color(0xFF2A2A2A)   // surfaceContainer (TopBar/NavBar)
+val PureBlack4 = Color(0xFF3A3A3A)   // surfaceVariant
+val PureBlack5 = Color(0xFF6E6E6E)   // outline
+
+// =====================================================================
+//  PURE LIGHT — «Светлая» тема. 5 near-whites + чёрный текст.
+// =====================================================================
+val PureWhite1 = Color(0xFFFAFAFA)   // background
+val PureWhite2 = Color(0xFFF0F0F0)   // surface (Card)
+val PureWhite3 = Color(0xFFE6E6E6)   // surfaceContainer
+val PureWhite4 = Color(0xFFD6D6D6)   // surfaceVariant
+val PureWhite5 = Color(0xFF8A8A8A)   // outline

@@ -44,13 +44,10 @@ class MainActivity : ComponentActivity() {
         handleDeepLink(intent, container)
 
         setContent {
-            // v1.24.0: тема из UserPrefs (5 палитр × dark/light). Меняется на лету.
+            // v1.24.4: 6 тем — Бильярд/Кофе/Лотус/Маракуйя всегда dark, а
+            // Тёмная/Светлая — отдельные монохромные схемы. dark/light-тумблер убран.
             val schemeKey by container.userPrefs.colorSchemeFlow.collectAsState(initial = "ORIGINAL")
-            val darkPref by container.userPrefs.darkThemeFlow.collectAsState(initial = true)
-            BilliardTrackerTheme(
-                scheme = AppColorScheme.fromKey(schemeKey),
-                darkTheme = darkPref,
-            ) {
+            BilliardTrackerTheme(scheme = AppColorScheme.fromKey(schemeKey)) {
                 var pending by remember { mutableStateOf<VersionDto?>(null) }
                 var stage by remember { mutableStateOf<UpdateStage>(UpdateStage.Idle) }
                 val scope = rememberCoroutineScope()

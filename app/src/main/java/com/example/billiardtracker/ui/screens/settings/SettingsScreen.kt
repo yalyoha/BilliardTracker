@@ -38,6 +38,16 @@ import com.example.billiardtracker.ui.theme.PeriDim
 import com.example.billiardtracker.ui.theme.PeriLavender
 import com.example.billiardtracker.ui.theme.PeriLight
 import com.example.billiardtracker.ui.theme.PeriMain
+import com.example.billiardtracker.ui.theme.PureBlack1
+import com.example.billiardtracker.ui.theme.PureBlack2
+import com.example.billiardtracker.ui.theme.PureBlack3
+import com.example.billiardtracker.ui.theme.PureBlack4
+import com.example.billiardtracker.ui.theme.PureBlack5
+import com.example.billiardtracker.ui.theme.PureWhite1
+import com.example.billiardtracker.ui.theme.PureWhite2
+import com.example.billiardtracker.ui.theme.PureWhite3
+import com.example.billiardtracker.ui.theme.PureWhite4
+import com.example.billiardtracker.ui.theme.PureWhite5
 import com.example.billiardtracker.ui.theme.RetroCrimson
 import com.example.billiardtracker.ui.theme.RetroFlame
 import com.example.billiardtracker.ui.theme.RetroIndigo
@@ -97,7 +107,6 @@ fun SettingsScreen(
     val activeTokenId by viewModel.activeTokenId.collectAsStateWithLifecycle()
     val enabledSlugs by viewModel.enabledGameSlugs.collectAsStateWithLifecycle()
     val colorSchemeKey by viewModel.colorScheme.collectAsStateWithLifecycle()
-    val darkTheme by viewModel.darkTheme.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var showUpdateDialog by remember { mutableStateOf(false) }
@@ -148,13 +157,11 @@ fun SettingsScreen(
                 }
             }
 
-            // v1.24.0: 5 палитр × dark/light. Меняется на лету — MainActivity
-            // подписывается на userPrefs и рекомпозит BilliardTrackerTheme.
+            // v1.24.4: 6 тем (Бильярд/Кофе/Лотус/Маракуйя/Тёмная/Светлая).
+            // Dark/light toggle убран — Тёмная и Светлая теперь отдельные схемы.
             AppearanceCard(
                 schemeKey = colorSchemeKey,
-                darkTheme = darkTheme,
                 onPickScheme = viewModel::setColorScheme,
-                onToggleDark = viewModel::setDarkTheme,
             )
 
             Card(Modifier.fillMaxWidth()) {
@@ -500,38 +507,24 @@ private fun RenameTokenDialog(
 }
 
 /**
- * v1.24.0: карточка «Оформление» — выбор из 5 цветовых схем + dark/light toggle.
- * Каждая палитра — Row с 5 цветными свотчами (превью) + названием. Активная
- * подсвечена фоном primaryContainer.
+ * v1.24.4: 6 тем в одном списке (без dark/light toggle — Тёмная и Светлая
+ * теперь отдельные схемы). Активная подсвечена фоном primaryContainer.
  */
 @Composable
 private fun AppearanceCard(
     schemeKey: String,
-    darkTheme: Boolean,
     onPickScheme: (String) -> Unit,
-    onToggleDark: (Boolean) -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Оформление", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Цветовая схема и режим тёмный/светлый — применяется сразу.",
+                "Цветовая схема — применяется сразу.",
                 style = MaterialTheme.typography.bodySmall,
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Тёмная тема", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        if (darkTheme) "Тёмный фон" else "Светлый фон",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                Switch(checked = darkTheme, onCheckedChange = onToggleDark)
-            }
-            HorizontalDivider()
             AppColorScheme.entries.forEach { s ->
                 val selected = s.name == schemeKey
-                val swatches = swatchesFor(s, dark = darkTheme)
+                val swatches = swatchesFor(s)
                 val rowBg = if (selected) MaterialTheme.colorScheme.primaryContainer
                             else ComposeColor.Transparent
                 Row(
@@ -563,13 +556,13 @@ private fun AppearanceCard(
 }
 
 /** 5 представительных цветов схемы для превью-полосы. */
-private fun swatchesFor(s: AppColorScheme, dark: Boolean): List<ComposeColor> = when (s) {
-    AppColorScheme.ORIGINAL ->
-        if (dark) listOf(FeltDark, FeltHeader, GraphiteSurface, AccentGold, BallCream)
-        else listOf(BallCream, ComposeColor(0xFFE0DAC0), ComposeColor.White, AccentGold, FeltGreen)
+private fun swatchesFor(s: AppColorScheme): List<ComposeColor> = when (s) {
+    AppColorScheme.ORIGINAL -> listOf(FeltDark, FeltHeader, GraphiteSurface, AccentGold, BallCream)
     AppColorScheme.EARTH -> listOf(EarthKhaki, EarthTaupe, EarthAshBrown, EarthDim, EarthPlum)
     AppColorScheme.PERIWINKLE -> listOf(PeriLight, PeriMain, PeriLavender, PeriDim, PeriDark)
     AppColorScheme.RETRO -> listOf(RetroCrimson, RetroFlame, RetroIndigo, RetroTeal, RetroLime)
+    AppColorScheme.DARK -> listOf(PureBlack1, PureBlack2, PureBlack3, PureBlack4, PureBlack5)
+    AppColorScheme.LIGHT -> listOf(PureWhite1, PureWhite2, PureWhite3, PureWhite4, PureWhite5)
 }
 
 private fun pluralVstrech(n: Int): String {
