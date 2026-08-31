@@ -71,7 +71,9 @@ jobs:
           BT_KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'billiardtracker' }}
           BT_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           BT_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
       - name: Достать versionCode / versionName / sha256
         id: apk
