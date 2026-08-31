@@ -124,12 +124,10 @@ class StakeSetupViewModel(
     }
 
     /**
-     * v1.24.8: perParticipant всегда 1:1 отражает team.players активного
-     * состава. Владелец теперь тоже team-member (кнопка «Добавить себя»
-     * персистит через teamState.addPlayer), поэтому extras больше нет.
-     *
-     * Handicap/overrideRub переносятся, если тот же игрок (displayName+phone)
-     * нашёлся в новом составе — иначе значения по умолчанию.
+     * Синхронизирует perParticipant с игроками активного состава.
+     * "Экстра"-участники (добавленные через «Добавить себя», не члены состава)
+     * сохраняются в хвосте списка — они не попадают в команду и исчезают
+     * только если пользователь явно их удалит.
      */
     private fun mergeParticipantsFromTeam(team: Team) {
         val digits: (String?) -> String = { it?.filter { c -> c.isDigit() }.orEmpty() }
@@ -145,7 +143,9 @@ class StakeSetupViewModel(
                 overrideRub = old?.overrideRub.orEmpty(),
             )
         }
-        _ui.value = _ui.value.copy(perParticipant = fromTeam)
+        val teamKeys = fromTeam.map { key(it.displayName, it.phone) }.toSet()
+        val extras = prev.filter { key(it.displayName, it.phone) !in teamKeys }
+        _ui.value = _ui.value.copy(perParticipant = fromTeam + extras)
     }
 
     /**
@@ -211,41 +211,42 @@ class StakeSetupViewModel(
     }
 
     /**
-     * v1.24.8: opt-in-добавление владельца ПРЯМО в активный состав через
-     * teamState.addPlayer → outbox → persist. До этого было только в
-     * perParticipant (temporary UI-list) — при пересоздании ViewModel
-     * или переключении составов владелец пропадал.
-     *
-     * combine(activeTeamId, teams) в init автоматически подтянет владельца
-     * в perParticipant после успешного addPlayer.
+     * Добавляет владельца телефона в perParticipant только для текущей встречи
+     * — без изменения состава. Состав намеренно не трогается, чтобы владелец
+     * не появлялся автоматически в следующей встрече.
      */
     fun addOwnerAsParticipant() {
         val name = _ui.value.ownerName.ifBlank { "Я" }
         val phone = _ui.value.ownerPhone
         if (_ui.value.ownerAlreadyIn) return
-        val teamId = teamState.activeTeamId.value ?: run {
-            _ui.value = _ui.value.copy(error = "Сначала выбери или создай состав")
-            return
-        }
-        viewModelScope.launch {
-            teamState.addPlayer(teamId, name, phone).onFailure { e ->
-                _ui.value = _ui.value.copy(error = e.message ?: "Не удалось добавить владельца")
-            }
-        }
+        _ui.value = _ui.value.copy(
+            perParticipant = _ui.value.perParticipant + ParticipantStakeUi(
+                displayName = name,
+                phone = phone,
+            )
+        )
     }
 
     /**
-     * Убрать участника по индексу — удаляет member'а из активного состава
-     * (teamState.removePlayerAt → outbox). Т.к. perParticipant теперь =
-     * team.players (после v1.24.7 fix), индексы совпадают.
+     * Убрать участника по индексу.
+     * Если участник входит в активный состав — удаляет из команды (persist).
+     * Если это «экстра» (добавлен через «Добавить себя», не член состава) —
+     * убирает только из perParticipant без изменения команды.
      */
     fun removeParticipant(idx: Int) {
-        val teamId = teamState.activeTeamId.value ?: return
-        val team = teamState.teamById(teamId) ?: return
-        if (idx !in team.players.indices) return
-        viewModelScope.launch {
-            teamState.removePlayerAt(teamId, idx).onFailure { e ->
-                _ui.value = _ui.value.copy(error = e.message ?: "Не удалось убрать игрока")
+        val teamId = teamState.activeTeamId.value
+        val team = if (teamId != null) teamState.teamById(teamId) else null
+        if (team != null && idx in team.players.indices) {
+            viewModelScope.launch {
+                teamState.removePlayerAt(teamId!!, idx).onFailure { e ->
+                    _ui.value = _ui.value.copy(error = e.message ?: "Не удалось убрать игрока")
+                }
+            }
+        } else {
+            val list = _ui.value.perParticipant.toMutableList()
+            if (idx in list.indices) {
+                list.removeAt(idx)
+                _ui.value = _ui.value.copy(perParticipant = list)
             }
         }
     }
