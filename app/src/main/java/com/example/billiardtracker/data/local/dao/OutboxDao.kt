@@ -22,6 +22,10 @@ interface OutboxDao {
     @Query("SELECT COUNT(*) FROM outbox_ops WHERE executed = 0")
     fun observePendingCount(): Flow<Int>
 
+    /** Реактивно наблюдать список pending-операций — для модалки с деталями. */
+    @Query("SELECT * FROM outbox_ops WHERE executed = 0 ORDER BY opId ASC")
+    fun observePendingOps(): Flow<List<OutboxOpEntity>>
+
     @Query("DELETE FROM outbox_ops WHERE opId = :opId")
     suspend fun deleteById(opId: Long)
 

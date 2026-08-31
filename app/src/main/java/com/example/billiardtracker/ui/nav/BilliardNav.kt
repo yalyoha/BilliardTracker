@@ -1,9 +1,19 @@
 package com.example.billiardtracker.ui.nav
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.billiardtracker.data.local.entity.OutboxOpEntity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.EmojiEvents
@@ -180,6 +190,8 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
         },
     ) { padding ->
         val pendingSync by container.pendingSyncCount.collectAsStateWithLifecycle(0)
+        val pendingOps by container.pendingSyncOps.collectAsStateWithLifecycle(emptyList())
+        var showPendingDialog by remember { mutableStateOf(false) }
         androidx.compose.foundation.layout.Box(Modifier.padding(padding).fillMaxSize()) {
             NavHost(
                 navController = nav,
@@ -340,7 +352,8 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                 androidx.compose.material3.Surface(
                     modifier = Modifier
                         .align(androidx.compose.ui.Alignment.TopEnd)
-                        .padding(8.dp),
+                        .padding(8.dp)
+                        .clickable { showPendingDialog = true },
                     shape = androidx.compose.material3.MaterialTheme.shapes.small,
                     color = androidx.compose.material3.MaterialTheme.colorScheme.tertiaryContainer,
                     tonalElevation = 2.dp,
@@ -353,6 +366,77 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                     )
                 }
             }
+            if (showPendingDialog) {
+                PendingOpsDialog(
+                    ops = pendingOps,
+                    onDismiss = { showPendingDialog = false },
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun PendingOpsDialog(
+    ops: List<OutboxOpEntity>,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Ожидают отправки") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    "Данные отправятся автоматически при появлении сети.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                ops.forEachIndexed { idx, op ->
+                    if (idx > 0) HorizontalDivider()
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            kindLabel(op.kind),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        if (op.attempts > 0) {
+                            Text(
+                                "Попыток: ${op.attempts}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (op.lastError != null) {
+                            Text(
+                                "Ошибка: ${op.lastError}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Закрыть") }
+        },
+    )
+}
+
+private fun kindLabel(kind: String) = when (kind) {
+    "create_tournament" -> "Создание встречи"
+    "start_game"        -> "Начало игры"
+    "finish_game"       -> "Завершение игры"
+    "finish_tournament" -> "Завершение встречи"
+    "add_shot"          -> "Добавление удара"
+    "delete_shot"       -> "Удаление удара"
+    "create_team"       -> "Создание состава"
+    "rename_team"       -> "Переименование состава"
+    "delete_team"       -> "Удаление состава"
+    "add_team_member"   -> "Добавление участника"
+    "delete_team_member"-> "Удаление участника"
+    else                -> kind
 }

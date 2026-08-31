@@ -203,4 +203,10 @@ class AppContainer(context: Context) {
      * Flow количества pending offline-ops. UI показывает "⏳ N" когда > 0.
      */
     val pendingSyncCount: kotlinx.coroutines.flow.Flow<Int> = outboxDao.observePendingCount()
+
+    /**
+     * Flow списка pending offline-ops — для модалки с деталями по тапу на ⏳.
+     */
+    val pendingSyncOps: kotlinx.coroutines.flow.Flow<List<com.example.billiardtracker.data.local.entity.OutboxOpEntity>> =
+        outboxDao.observePendingOps()
 }
