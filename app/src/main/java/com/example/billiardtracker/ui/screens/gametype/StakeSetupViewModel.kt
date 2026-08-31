@@ -44,6 +44,7 @@ data class StakeUiState(
     val loading: Boolean = false,
     val error: String? = null,
     val minPlayersDialogShown: Boolean = false,
+    val noTeamDialogShown: Boolean = false,
     val createdTournamentId: Long? = null,
 ) {
     /** true если владелец телефона уже в списке участников (по phone-match). */
@@ -290,10 +291,18 @@ class StakeSetupViewModel(
         _ui.value = _ui.value.copy(minPlayersDialogShown = false)
     }
 
+    fun dismissNoTeamDialog() {
+        _ui.value = _ui.value.copy(noTeamDialogShown = false)
+    }
+
     fun submit() {
         val slug = _ui.value.gameTypeSlug.ifBlank { newTournamentState.gameType.value.orEmpty() }
         if (slug.isBlank()) {
             _ui.value = _ui.value.copy(error = "Игра не выбрана — вернись назад и выбери")
+            return
+        }
+        if (_selectedTeamId.value == null) {
+            _ui.value = _ui.value.copy(noTeamDialogShown = true)
             return
         }
         if (_ui.value.perParticipant.isEmpty()) {

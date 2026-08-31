@@ -288,6 +288,17 @@ fun StakeSetupScreen(
         )
     }
 
+    if (ui.noTeamDialogShown) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissNoTeamDialog() },
+            title = { Text("Выберите состав") },
+            text = { Text("Нажмите на один из составов в списке, чтобы выбрать участников.") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissNoTeamDialog() }) { Text("Закрыть") }
+            },
+        )
+    }
+
     if (ui.minPlayersDialogShown) {
         if (!ui.ownerAlreadyIn) {
             AlertDialog(
