@@ -287,6 +287,40 @@ fun StakeSetupScreen(
             },
         )
     }
+
+    if (ui.minPlayersDialogShown) {
+        if (!ui.ownerAlreadyIn) {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissMinPlayersDialog() },
+                title = { Text("Нужен второй игрок") },
+                text = { Text("Добавьте ваш профиль или второго игрока в состав.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.dismissMinPlayersDialog()
+                            viewModel.addOwnerAsParticipant()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Добавить себя") }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { viewModel.dismissMinPlayersDialog() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Закрыть") }
+                },
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissMinPlayersDialog() },
+                title = { Text("Нужен второй игрок") },
+                text = { Text("Добавьте ещё одного участника в состав.") },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.dismissMinPlayersDialog() }) { Text("Закрыть") }
+                },
+            )
+        }
+    }
 }
 
 @Composable

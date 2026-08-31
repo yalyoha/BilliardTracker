@@ -43,6 +43,7 @@ data class StakeUiState(
     val ownerPhone: String? = null,
     val loading: Boolean = false,
     val error: String? = null,
+    val minPlayersDialogShown: Boolean = false,
     val createdTournamentId: Long? = null,
 ) {
     /** true если владелец телефона уже в списке участников (по phone-match). */
@@ -285,6 +286,10 @@ class StakeSetupViewModel(
         }
     }
 
+    fun dismissMinPlayersDialog() {
+        _ui.value = _ui.value.copy(minPlayersDialogShown = false)
+    }
+
     fun submit() {
         val slug = _ui.value.gameTypeSlug.ifBlank { newTournamentState.gameType.value.orEmpty() }
         if (slug.isBlank()) {
@@ -296,11 +301,7 @@ class StakeSetupViewModel(
             return
         }
         if (_ui.value.perParticipant.size < 2) {
-            val msg = if (!_ui.value.ownerAlreadyIn)
-                "Нужно минимум 2 игрока — нажми «Добавить себя» чтобы присоединиться"
-            else
-                "Нужно минимум 2 игрока — добавь второго участника в состав"
-            _ui.value = _ui.value.copy(error = msg)
+            _ui.value = _ui.value.copy(minPlayersDialogShown = true)
             return
         }
         val moneyKop = _ui.value.stakeRub.toLongOrNull()?.times(100)
