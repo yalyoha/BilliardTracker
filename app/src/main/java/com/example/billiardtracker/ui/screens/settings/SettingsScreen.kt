@@ -122,7 +122,6 @@ fun SettingsScreen(
         topBar = {
             BilliardTopBar(
                 title = { Text("Настройки") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Назад") } },
             )
         },
     ) { padding ->
