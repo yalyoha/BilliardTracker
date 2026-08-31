@@ -70,24 +70,29 @@ class StakeSetupViewModel(
     private val _ui = MutableStateFlow(StakeUiState())
     val ui: StateFlow<StakeUiState> = _ui.asStateFlow()
 
-    // Прокидываем teams/activeTeamId из TeamState как есть — UI подписывается
-    // напрямую на них через collectAsStateWithLifecycle.
     val teams = teamState.teams
-    val activeTeamId = teamState.activeTeamId
+
+    // Локальный выбор состава для этой встречи. Стартует null — участники
+    // пусты до явного тапа по составу. Не связан с teamState.activeTeamId
+    // напрямую, чтобы не подтягивать прошлый активный состав автоматически.
+    private val _selectedTeamId = MutableStateFlow<Long?>(null)
+    val activeTeamId: StateFlow<Long?> = _selectedTeamId.asStateFlow()
+
+    /** Вызывается при тапе по составу в UI. Заполняет Участников и сохраняет в prefs. */
+    fun selectTeam(teamId: Long) {
+        _selectedTeamId.value = teamId
+        teamState.setActiveTeam(teamId)
+    }
 
     init {
         loadFromState()
         viewModelScope.launch { fetchNearbyAndAutoFill() }
         viewModelScope.launch { teamState.refresh() }
-        // v1.24.6: реактивно на смену активного состава + правки в его игроках.
-        // Раньше collect срабатывал только на activeTeamId; если teams-список
-        // ещё не загрузился (refresh() параллельно летит), teamById() возвращал
-        // null и заполнение молча пропускалось — блок «Участники» оставался
-        // пустым до следующего тапа. Также adding player к активной команде
-        // не обновлял perParticipant. combine over (activeTeamId × teams) чинит
-        // оба кейса — эмитит при любом изменении.
+        // Реактивно: если изменился выбранный состав ИЛИ список игроков в нём —
+        // перезаполняем Участников. Реагирует только на _selectedTeamId (локальный),
+        // поэтому при загрузке экрана Участники пусты.
         viewModelScope.launch {
-            combine(teamState.activeTeamId, teamState.teams) { id, teams ->
+            combine(_selectedTeamId, teamState.teams) { id, teams ->
                 id?.let { active -> teams.firstOrNull { it.id == active } }
             }.collect { team ->
                 if (team != null) mergeParticipantsFromTeam(team)
@@ -227,7 +232,7 @@ class StakeSetupViewModel(
         val name = _ui.value.ownerName.ifBlank { "Я" }
         val phone = _ui.value.ownerPhone
         if (_ui.value.ownerAlreadyIn) return
-        val teamId = teamState.activeTeamId.value ?: run {
+        val teamId = _selectedTeamId.value ?: run {
             _ui.value = _ui.value.copy(error = "Сначала выбери или создай состав")
             return
         }
@@ -257,7 +262,7 @@ class StakeSetupViewModel(
      * perParticipant без изменения команды.
      */
     fun removeParticipant(idx: Int) {
-        val teamId = teamState.activeTeamId.value
+        val teamId = _selectedTeamId.value
         val team = if (teamId != null) teamState.teamById(teamId) else null
         val ownerDigits = _ui.value.ownerPhone?.filter { it.isDigit() }.orEmpty()
         val nonOwnerSize = team?.players

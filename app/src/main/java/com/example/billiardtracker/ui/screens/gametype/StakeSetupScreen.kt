@@ -158,7 +158,7 @@ fun StakeSetupScreen(
                         isActive = team.id == activeTeamId,
                         expanded = team.id == teamUi.expandedTeamId,
                         ui = teamUi,
-                        onSetActive = { teamViewModel.setActive(team.id) },
+                        onSetActive = { viewModel.selectTeam(team.id) },
                         onExpand = { teamViewModel.expandTeam(team.id) },
                         onCollapse = teamViewModel::collapseTeam,
                         onRename = { teamToRename = team },
