@@ -364,29 +364,42 @@ class TournamentViewModel(
         }
 
     /**
-     * Tournament-wide payout: aggregates scores across every finished game
-     * (not just the last one). This is what the PayoutScreen shows —
-     * per-game payouts wouldn't reflect who actually owes whom by the end.
+     * Tournament-wide payout: aggregates scores across every finished game.
+     * per_match: победитель каждой партии получает moneyPerBallKop (= цена встречи)
+     * от каждого остального участника.
+     * per_ball (дефолт): каждый шар оплачивается по moneyPerBallKop.
      */
     val tournamentPayout: PayoutResult?
         get() {
             val t = _ui.value.tournament ?: return null
             val games = _ui.value.games
             if (games.isEmpty()) return null
+            val inputTournament = PayoutInputTournament(id = t.id, moneyPerBallKop = t.moneyPerBallKop)
+            val inputParticipants = t.participants.map {
+                PayoutInputParticipant(
+                    id = it.id,
+                    handicapPoints = it.handicapPoints,
+                    perBallOverrideKop = it.perBallOverrideKop,
+                )
+            }
+            if (t.stakeMode == "per_match") {
+                val gameWinners = games
+                    .filter { it.status == "finished" }
+                    .map { it.winnerParticipantId }
+                return PayoutCalculator.computePerMatch(
+                    tournament = inputTournament,
+                    participants = inputParticipants,
+                    gameWinners = gameWinners,
+                )
+            }
             val shots = games.flatMap { it.scores }.flatMap { s ->
                 List(s.points.coerceAtLeast(0)) {
                     PayoutInputShot(participantId = s.participantId, kind = "ball", pointsDelta = 1)
                 }
             }
             return PayoutCalculator.compute(
-                tournament = PayoutInputTournament(id = t.id, moneyPerBallKop = t.moneyPerBallKop),
-                participants = t.participants.map {
-                    PayoutInputParticipant(
-                        id = it.id,
-                        handicapPoints = it.handicapPoints,
-                        perBallOverrideKop = it.perBallOverrideKop,
-                    )
-                },
+                tournament = inputTournament,
+                participants = inputParticipants,
                 shots = shots,
             )
         }

@@ -26,6 +26,37 @@ data class PayoutResult(
 )
 
 object PayoutCalculator {
+
+    // Greedy debt simplification: largest creditor ↔ largest debtor.
+    // Returns a list of PayoutEntry transfers. Modifies `net` in place.
+    private fun settleNet(net: MutableMap<Long, Long>): List<PayoutEntry> {
+        val payouts = mutableListOf<PayoutEntry>()
+        val creditors = net.filter { it.value > 0 }
+            .toList().sortedByDescending { it.second }.toMutableList()
+        val debtors = net.filter { it.value < 0 }
+            .toList().sortedBy { it.second }.toMutableList()
+        while (creditors.isNotEmpty() && debtors.isNotEmpty()) {
+            val (creditorId, creditorAmt) = creditors.first()
+            val (debtorId, debtorAmt) = debtors.first()
+            val transfer = minOf(creditorAmt, -debtorAmt)
+            payouts += PayoutEntry(
+                fromParticipantId = debtorId,
+                toParticipantId = creditorId,
+                amountKop = transfer,
+            )
+            val newCredit = creditorAmt - transfer
+            val newDebt = debtorAmt + transfer
+            creditors.removeAt(0)
+            debtors.removeAt(0)
+            if (newCredit > 0) creditors.add(0, creditorId to newCredit)
+            if (newDebt < 0) debtors.add(0, debtorId to newDebt)
+        }
+        return payouts
+    }
+
+    /**
+     * Расчёт выплат по шарам (per_ball): каждый шар = moneyPerBallKop с проигравшего.
+     */
     fun compute(
         tournament: PayoutInputTournament,
         participants: List<PayoutInputParticipant>,
@@ -38,15 +69,12 @@ object PayoutCalculator {
                 scores[s.participantId] = scores[s.participantId]!! + s.pointsDelta
             }
         }
-        val payouts = mutableListOf<PayoutEntry>()
-        if (tournament.moneyPerBallKop == null) return PayoutResult(scores, payouts)
+        if (tournament.moneyPerBallKop == null) return PayoutResult(scores, mutableListOf())
 
         val rateOf: (PayoutInputParticipant) -> Long =
             { it.perBallOverrideKop ?: tournament.moneyPerBallKop }
         val byId = participants.associateBy { it.id }
 
-        // Compute per-player NET balance by summing pairwise differences.
-        // Positive net = owed money, negative = owes money.
         val net = mutableMapOf<Long, Long>()
         val ids = participants.map { it.id }.sorted()
         for (i in ids.indices) {
@@ -65,32 +93,36 @@ object PayoutCalculator {
                 }
             }
         }
+        return PayoutResult(scores, settleNet(net))
+    }
 
-        // Debt simplification: greedy match largest debtor and creditor,
-        // repeatedly transferring min(|debt|, credit). Collapses chains like
-        // A→B, B→C into a single A→C — what the user actually cares about
-        // when settling up.
-        val creditors = net.filter { it.value > 0 }
-            .toList().sortedByDescending { it.second }.toMutableList()
-        val debtors = net.filter { it.value < 0 }
-            .toList().sortedBy { it.second }.toMutableList()
+    /**
+     * Расчёт выплат за встречу (per_match): победитель каждой партии получает
+     * moneyPerBallKop (здесь = цена встречи) от каждого остального участника.
+     * `gameWinners` — winnerParticipantId каждой завершённой партии.
+     */
+    fun computePerMatch(
+        tournament: PayoutInputTournament,
+        participants: List<PayoutInputParticipant>,
+        gameWinners: List<Long?>,
+    ): PayoutResult {
+        val ids = participants.map { it.id }.toSet()
+        // scores = число побед за встречу
+        val scores = mutableMapOf<Long, Int>()
+        for (p in participants) scores[p.id] = 0
+        for (w in gameWinners) if (w != null && ids.contains(w)) scores[w] = (scores[w] ?: 0) + 1
 
-        while (creditors.isNotEmpty() && debtors.isNotEmpty()) {
-            val (creditorId, creditorAmt) = creditors.first()
-            val (debtorId, debtorAmt) = debtors.first()
-            val transfer = minOf(creditorAmt, -debtorAmt)
-            payouts += PayoutEntry(
-                fromParticipantId = debtorId,
-                toParticipantId = creditorId,
-                amountKop = transfer,
-            )
-            val newCredit = creditorAmt - transfer
-            val newDebt = debtorAmt + transfer
-            creditors.removeAt(0)
-            debtors.removeAt(0)
-            if (newCredit > 0) creditors.add(0, creditorId to newCredit)
-            if (newDebt < 0) debtors.add(0, debtorId to newDebt)
+        val priceKop = tournament.moneyPerBallKop ?: return PayoutResult(scores, emptyList())
+
+        val net = mutableMapOf<Long, Long>()
+        for (w in gameWinners) {
+            if (w == null || !ids.contains(w)) continue
+            for (pid in ids) {
+                if (pid == w) continue
+                net[w] = (net[w] ?: 0L) + priceKop
+                net[pid] = (net[pid] ?: 0L) - priceKop
+            }
         }
-        return PayoutResult(scores, payouts)
+        return PayoutResult(scores, settleNet(net))
     }
 }
