@@ -388,12 +388,31 @@ fun TournamentScreen(
                             append(" · ${p.effectiveName(ui.myUserId, ui.myLocalName)} $s")
                         }
                     }
-                    val autoWinner = t.participants
-                        .maxByOrNull { scoresByPid[it.id] ?: 0 }
+                    val usePotCount = t.gameType in setOf(
+                        "svobodnaya-piramida", "kombinirovannaya-piramida", "dinamichnaya-piramida"
+                    )
+                    val autoWinner = if (usePotCount) {
+                        val potsByPid = ui.currentGameShots
+                            .filter { it.pointsDelta > 0 }
+                            .groupBy { it.participantId }
+                            .mapValues { (_, shots) -> shots.sumOf { it.pointsDelta } }
+                        t.participants.maxByOrNull { potsByPid[it.id] ?: 0 }
+                    } else {
+                        t.participants.maxByOrNull { scoresByPid[it.id] ?: 0 }
+                    }
+                    val autoWinnerScore = if (usePotCount) {
+                        val potsByPid = ui.currentGameShots
+                            .filter { it.pointsDelta > 0 }
+                            .groupBy { it.participantId }
+                            .mapValues { (_, shots) -> shots.sumOf { it.pointsDelta } }
+                        autoWinner?.let { potsByPid[it.id] ?: 0 }
+                    } else {
+                        autoWinner?.let { scoresByPid[it.id] ?: 0 }
+                    }
                     com.example.billiardtracker.ui.screens.tournament.scorers.MatchBottomBar(
                         targetHint = targetHint,
                         winnerName = autoWinner?.effectiveName(ui.myUserId, ui.myLocalName),
-                        winnerScore = autoWinner?.let { scoresByPid[it.id] ?: 0 },
+                        winnerScore = autoWinnerScore,
                         onUndo = viewModel::undoLastShot,
                         onFinish = { viewModel.finishGame() },
                     )

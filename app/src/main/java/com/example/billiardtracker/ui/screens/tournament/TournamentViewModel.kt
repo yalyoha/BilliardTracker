@@ -221,14 +221,32 @@ class TournamentViewModel(
         // Auto-pick winner as highest scorer if caller didn't specify one.
         // Ties break to the participant that appears first in the tournament
         // — deterministic, and matches the order users see in the scoreboard.
+        val gameType = _ui.value.tournament?.gameType ?: ""
+        // Для этих дисциплин победитель — кто забил больше шаров (pointsDelta > 0),
+        // штрафы не влияют на победителя (они финансовые, а не скоринговые для победы).
+        val usePotCount = gameType in setOf(
+            "svobodnaya-piramida", "kombinirovannaya-piramida", "dinamichnaya-piramida"
+        )
         val resolvedWinner = winnerPid ?: run {
             val partIdOrder = _ui.value.tournament?.participants
                 ?.mapIndexed { i, p -> p.id to i }?.toMap() ?: emptyMap()
-            game.scores
-                .maxWithOrNull(
-                    compareBy<com.example.billiardtracker.data.remote.dto.ScoreDto> { it.points }
-                        .thenByDescending { partIdOrder[it.participantId] ?: Int.MAX_VALUE },
-                )?.participantId
+            if (usePotCount) {
+                val potsByPid = _ui.value.currentGameShots
+                    .filter { it.pointsDelta > 0 }
+                    .groupBy { it.participantId }
+                    .mapValues { (_, shots) -> shots.sumOf { it.pointsDelta } }
+                potsByPid.entries
+                    .maxWithOrNull(
+                        compareBy<Map.Entry<Long, Int>> { it.value }
+                            .thenByDescending { partIdOrder[it.key] ?: Int.MAX_VALUE },
+                    )?.key
+            } else {
+                game.scores
+                    .maxWithOrNull(
+                        compareBy<com.example.billiardtracker.data.remote.dto.ScoreDto> { it.points }
+                            .thenByDescending { partIdOrder[it.participantId] ?: Int.MAX_VALUE },
+                    )?.participantId
+            }
         }
         // Task 5 fix: оптимистично помечаем партию finished + winner прямо
         // в _ui. refresh() ниже потом смёржит с сервером; если сервер ещё не
