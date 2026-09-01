@@ -16,7 +16,7 @@ enum class GameType(val displayName: String, val ruleFileSlug: String) {
     BIG_RUSSIAN_PARTY("Большая русская партия", "bolshaya-russkaya-partiya"),
     ALAGYOR("Алагёр", "alagyor"),
     YAROSLAVSKAYA("Ярославская пирамида", "yaroslavskaya-piramida"),
-    KOLKHOZ("Колхоз (Купец / Шведка)", "kolkhoz"),
+    KOLKHOZ("Колхоз", "kolkhoz"),
     FISHKI("Фишки", "fishki"),
     ONE_POCKET_RU("Один карман (по-русски)", "odin-karman"),
     GROSH("Грош / Круг", "grosh"),
