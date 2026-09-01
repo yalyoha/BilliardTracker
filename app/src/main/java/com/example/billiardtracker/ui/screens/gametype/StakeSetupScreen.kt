@@ -119,13 +119,15 @@ fun StakeSetupScreen(
                 Text("Эта дисциплина не подразумевает игру на деньги", style = MaterialTheme.typography.bodySmall)
             }
 
-            // === Размер партии (0..1000, ±, default 8) ===
-            GameSizeInput(
-                size = ui.gameSize,
-                onDecrement = viewModel::decGameSize,
-                onIncrement = viewModel::incGameSize,
-                onTextChange = viewModel::setGameSizeText,
-            )
+            // === Размер партии (0..1000, ±, default 8) — не для Колхоза ===
+            if (ui.gameTypeSlug != "kolkhoz") {
+                GameSizeInput(
+                    size = ui.gameSize,
+                    onDecrement = viewModel::decGameSize,
+                    onIncrement = viewModel::incGameSize,
+                    onTextChange = viewModel::setGameSizeText,
+                )
+            }
 
             WinsRequiredDropdown(
                 value = ui.winsRequired,
