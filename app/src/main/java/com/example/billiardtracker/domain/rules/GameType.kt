@@ -9,7 +9,7 @@ package com.example.billiardtracker.domain.rules
 enum class GameType(val displayName: String, val ruleFileSlug: String) {
     FREE_PYRAMID("Свободная", "svobodnaya-piramida"),
     COMBINED_PYRAMID("Московская", "kombinirovannaya-piramida"),
-    DYNAMIC_PYRAMID("Динамичная (Невская)", "dinamichnaya-piramida"),
+    DYNAMIC_PYRAMID("Динамичная", "dinamichnaya-piramida"),
     CLASSICAL_PYRAMID("Классическая (71 очко)", "klassicheskaya-piramida"),
     FREE_PYRAMID_CONTINUATION("Свободная с продолжением", "svobodnaya-s-prodolzheniem"),
     SMALL_RUSSIAN_PARTY("Малая русская партия", "malaya-russkaya-partiya"),
