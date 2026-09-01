@@ -58,6 +58,33 @@ class TournamentViewModel(
     private val _ui = MutableStateFlow(TournamentUiState())
     val ui: StateFlow<TournamentUiState> = _ui.asStateFlow()
 
+    // Порядок ударов для Колхоза: список participantId в очерёдности хода.
+    // null = ещё не инициализирован (до загрузки участников).
+    private val _kolkhozOrder = MutableStateFlow<List<Long>?>(null)
+    val kolkhozOrder: StateFlow<List<Long>?> = _kolkhozOrder.asStateFlow()
+
+    fun initKolkhozOrder(participantIds: List<Long>) {
+        if (_kolkhozOrder.value == null) {
+            _kolkhozOrder.value = participantIds
+        }
+    }
+
+    fun moveKolkhozPlayerUp(pid: Long) {
+        val order = _kolkhozOrder.value ?: return
+        val idx = order.indexOf(pid)
+        if (idx <= 0) return
+        val newOrder = order.toMutableList().also { it.removeAt(idx); it.add(idx - 1, pid) }
+        _kolkhozOrder.value = newOrder
+    }
+
+    fun moveKolkhozPlayerDown(pid: Long) {
+        val order = _kolkhozOrder.value ?: return
+        val idx = order.indexOf(pid)
+        if (idx < 0 || idx >= order.size - 1) return
+        val newOrder = order.toMutableList().also { it.removeAt(idx); it.add(idx + 1, pid) }
+        _kolkhozOrder.value = newOrder
+    }
+
     init {
         viewModelScope.launch {
             val uid = userPrefs.getUserId() ?: 0
