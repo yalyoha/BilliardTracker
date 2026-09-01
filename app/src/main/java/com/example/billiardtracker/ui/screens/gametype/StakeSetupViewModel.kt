@@ -117,12 +117,17 @@ class StakeSetupViewModel(
         // Если participants уже были положены навигацией (legacy path) — берём их;
         // иначе позже fillParticipantsFromTeam заполнит из активного состава.
         val parts = newTournamentState.participants.value
+        val defaultStakeMode = when (slug) {
+            "svobodnaya-piramida", "kombinirovannaya-piramida" -> "per_match"
+            else -> "per_ball"
+        }
         _ui.value = _ui.value.copy(
             gameTypeName = gt.displayName,
             gameTypeSlug = slug,
             moneyPlayable = profile.moneyPlayable,
             title = newTournamentState.title.value ?: _ui.value.title,
             stakeRub = _ui.value.stakeRub.ifBlank { "100" },
+            stakeMode = defaultStakeMode,
             gameSize = defaultSize,
             winsRequired = newTournamentState.winsRequired.value ?: 3,
             perParticipant = if (parts.isEmpty()) _ui.value.perParticipant
