@@ -131,16 +131,27 @@ class TournamentViewModel(
                 }
                 else -> mergedGames.lastOrNull { it.status == "active" } ?: mergedGames.lastOrNull()
             }
-            // listShots уже мержит серверные + локальные pending (id<0) из Room
-            // с корректным gameId после start_game-remap. Локальная копия в VM
-            // после remap отставала — оптимистичный «+» визуально сбрасывался.
+            // listShots мержит серверные + локальные pending (id<0) из Room.
+            // После этого пересчитываем active.scores из shots — иначе сервер
+            // отдаёт стale scores (без pending ударов), и счёт сбрасывается.
             val shots = if (active == null) emptyList()
                 else gameRepo.listShots(active.id).getOrElse { emptyList() }
+            val activeWithScores = active?.let { g ->
+                if (shots.isEmpty()) g
+                else {
+                    val recalc = shots
+                        .groupBy { it.participantId }
+                        .mapValues { (_, list) -> list.sumOf { it.pointsDelta } }
+                    g.copy(scores = recalc.map {
+                        com.example.billiardtracker.data.remote.dto.ScoreDto(it.key, it.value)
+                    })
+                }
+            }
             _ui.value = _ui.value.copy(
                 loading = false,
                 tournament = t,
                 games = mergedGames,
-                currentGame = active,
+                currentGame = activeWithScores,
                 currentGameShots = shots,
             )
         }.onFailure {
