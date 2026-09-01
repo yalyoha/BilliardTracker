@@ -7,7 +7,7 @@ package com.example.billiardtracker.domain.rules
  * ключом parity-словаря `RULE_PROFILES` в backend (`src/domain/rule-profiles.js`).
  */
 enum class GameType(val displayName: String, val ruleFileSlug: String) {
-    FREE_PYRAMID("Свободная пирамида", "svobodnaya-piramida"),
+    FREE_PYRAMID("Свободная", "svobodnaya-piramida"),
     COMBINED_PYRAMID("Комбинированная (Московская)", "kombinirovannaya-piramida"),
     DYNAMIC_PYRAMID("Динамичная (Невская)", "dinamichnaya-piramida"),
     CLASSICAL_PYRAMID("Классическая (71 очко)", "klassicheskaya-piramida"),
