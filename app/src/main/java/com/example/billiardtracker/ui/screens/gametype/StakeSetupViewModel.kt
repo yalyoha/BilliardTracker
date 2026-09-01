@@ -118,7 +118,7 @@ class StakeSetupViewModel(
         // иначе позже fillParticipantsFromTeam заполнит из активного состава.
         val parts = newTournamentState.participants.value
         val defaultStakeMode = when (slug) {
-            "svobodnaya-piramida", "kombinirovannaya-piramida" -> "per_match"
+            "svobodnaya-piramida", "kombinirovannaya-piramida", "dinamichnaya-piramida" -> "per_match"
             else -> "per_ball"
         }
         _ui.value = _ui.value.copy(
