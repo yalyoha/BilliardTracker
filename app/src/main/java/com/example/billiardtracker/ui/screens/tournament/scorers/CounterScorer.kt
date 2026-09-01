@@ -20,10 +20,7 @@ import com.example.billiardtracker.domain.rules.RuleProfile
  *
  * Семантика:
  *   `+`      → onShot(pid, "ball",   null, +1)   — быстрый +1
- *   `Штраф`  → onDecrement(pid)                   — роль «−», удаляет последний
- *              positive shot игрока; disabled при currentScore == 0.
- *              Не создаёт shot с pointsDelta=-1 (иначе победитель определялся
- *              бы «у кого меньше штрафа» — см. todo task 4).
+ *   `Штраф`  → onShot(pid, "foul",   null, -1)   — штрафной удар, −1 шар
  *   `Чужой`  → onShot(pid, "ball",   null, +1)   — то же что "+"
  *   `Свой`   → onShot(pid, "svoiak", null, +1)   — свояк (если profile.allowsSvoiak)
  */
@@ -33,7 +30,7 @@ fun CounterScorer(
     profile: RuleProfile,
     currentScore: Int,
     onShot: (participantId: Long, kind: String, ballNumber: Int?, pointsDelta: Int) -> Unit,
-    onDecrement: (participantId: Long) -> Unit,
+    onDecrement: (participantId: Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -49,8 +46,7 @@ fun CounterScorer(
                 modifier = Modifier.weight(1f),
             ) { Text("+", style = MaterialTheme.typography.headlineSmall) }
             OutlinedButton(
-                onClick = { onDecrement(pid) },
-                enabled = currentScore > 0,
+                onClick = { onShot(pid, "foul", null, -1) },
                 modifier = Modifier.weight(1f),
             ) { Text("Штраф") }
         }
