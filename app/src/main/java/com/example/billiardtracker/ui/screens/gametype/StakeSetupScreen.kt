@@ -95,11 +95,6 @@ fun StakeSetupScreen(
             Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedTextField(
-                value = ui.title, onValueChange = viewModel::setTitle,
-                label = { Text("Название") },
-                singleLine = true, modifier = Modifier.fillMaxWidth(),
-            )
             if (ui.nearbyClubs.isNotEmpty()) {
                 ClubPickerDropdown(
                     clubs = ui.nearbyClubs,
