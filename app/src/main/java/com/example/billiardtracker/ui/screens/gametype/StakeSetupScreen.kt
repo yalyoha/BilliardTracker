@@ -95,11 +95,6 @@ fun StakeSetupScreen(
             Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedTextField(
-                value = ui.title, onValueChange = viewModel::setTitle,
-                label = { Text("Название") },
-                singleLine = true, modifier = Modifier.fillMaxWidth(),
-            )
             if (ui.nearbyClubs.isNotEmpty()) {
                 ClubPickerDropdown(
                     clubs = ui.nearbyClubs,
@@ -124,13 +119,15 @@ fun StakeSetupScreen(
                 Text("Эта дисциплина не подразумевает игру на деньги", style = MaterialTheme.typography.bodySmall)
             }
 
-            // === Размер партии (0..1000, ±, default 8) ===
-            GameSizeInput(
-                size = ui.gameSize,
-                onDecrement = viewModel::decGameSize,
-                onIncrement = viewModel::incGameSize,
-                onTextChange = viewModel::setGameSizeText,
-            )
+            // === Размер партии (0..1000, ±, default 8) — не для Колхоза ===
+            if (ui.gameTypeSlug != "kolkhoz") {
+                GameSizeInput(
+                    size = ui.gameSize,
+                    onDecrement = viewModel::decGameSize,
+                    onIncrement = viewModel::incGameSize,
+                    onTextChange = viewModel::setGameSizeText,
+                )
+            }
 
             WinsRequiredDropdown(
                 value = ui.winsRequired,
@@ -158,7 +155,7 @@ fun StakeSetupScreen(
                         isActive = team.id == activeTeamId,
                         expanded = team.id == teamUi.expandedTeamId,
                         ui = teamUi,
-                        onSetActive = { teamViewModel.setActive(team.id) },
+                        onSetActive = { viewModel.selectTeam(team.id) },
                         onExpand = { teamViewModel.expandTeam(team.id) },
                         onCollapse = teamViewModel::collapseTeam,
                         onRename = { teamToRename = team },
@@ -286,6 +283,51 @@ fun StakeSetupScreen(
                 ) { Text("Отмена") }
             },
         )
+    }
+
+    if (ui.noTeamDialogShown) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissNoTeamDialog() },
+            title = { Text("Выберите состав") },
+            text = { Text("Нажмите на один из составов в списке, чтобы выбрать участников.") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissNoTeamDialog() }) { Text("Закрыть") }
+            },
+        )
+    }
+
+    if (ui.minPlayersDialogShown) {
+        if (!ui.ownerAlreadyIn) {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissMinPlayersDialog() },
+                title = { Text("Нужен второй игрок") },
+                text = { Text("Добавьте ваш профиль или второго игрока в состав.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.dismissMinPlayersDialog()
+                            viewModel.addOwnerAsParticipant()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Добавить себя") }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { viewModel.dismissMinPlayersDialog() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Закрыть") }
+                },
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissMinPlayersDialog() },
+                title = { Text("Нужен второй игрок") },
+                text = { Text("Добавьте ещё одного участника в состав.") },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.dismissMinPlayersDialog() }) { Text("Закрыть") }
+                },
+            )
+        }
     }
 }
 

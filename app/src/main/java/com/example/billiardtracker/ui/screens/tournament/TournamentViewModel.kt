@@ -58,6 +58,33 @@ class TournamentViewModel(
     private val _ui = MutableStateFlow(TournamentUiState())
     val ui: StateFlow<TournamentUiState> = _ui.asStateFlow()
 
+    // Порядок ударов для Колхоза: список participantId в очерёдности хода.
+    // null = ещё не инициализирован (до загрузки участников).
+    private val _kolkhozOrder = MutableStateFlow<List<Long>?>(null)
+    val kolkhozOrder: StateFlow<List<Long>?> = _kolkhozOrder.asStateFlow()
+
+    fun initKolkhozOrder(participantIds: List<Long>) {
+        if (_kolkhozOrder.value == null) {
+            _kolkhozOrder.value = participantIds
+        }
+    }
+
+    fun moveKolkhozPlayerUp(pid: Long) {
+        val order = _kolkhozOrder.value ?: return
+        val idx = order.indexOf(pid)
+        if (idx <= 0) return
+        val newOrder = order.toMutableList().also { it.removeAt(idx); it.add(idx - 1, pid) }
+        _kolkhozOrder.value = newOrder
+    }
+
+    fun moveKolkhozPlayerDown(pid: Long) {
+        val order = _kolkhozOrder.value ?: return
+        val idx = order.indexOf(pid)
+        if (idx < 0 || idx >= order.size - 1) return
+        val newOrder = order.toMutableList().also { it.removeAt(idx); it.add(idx + 1, pid) }
+        _kolkhozOrder.value = newOrder
+    }
+
     init {
         viewModelScope.launch {
             val uid = userPrefs.getUserId() ?: 0
@@ -104,16 +131,27 @@ class TournamentViewModel(
                 }
                 else -> mergedGames.lastOrNull { it.status == "active" } ?: mergedGames.lastOrNull()
             }
-            // listShots уже мержит серверные + локальные pending (id<0) из Room
-            // с корректным gameId после start_game-remap. Локальная копия в VM
-            // после remap отставала — оптимистичный «+» визуально сбрасывался.
+            // listShots мержит серверные + локальные pending (id<0) из Room.
+            // После этого пересчитываем active.scores из shots — иначе сервер
+            // отдаёт стale scores (без pending ударов), и счёт сбрасывается.
             val shots = if (active == null) emptyList()
                 else gameRepo.listShots(active.id).getOrElse { emptyList() }
+            val activeWithScores = active?.let { g ->
+                if (shots.isEmpty()) g
+                else {
+                    val recalc = shots
+                        .groupBy { it.participantId }
+                        .mapValues { (_, list) -> list.sumOf { it.pointsDelta } }
+                    g.copy(scores = recalc.map {
+                        com.example.billiardtracker.data.remote.dto.ScoreDto(it.key, it.value)
+                    })
+                }
+            }
             _ui.value = _ui.value.copy(
                 loading = false,
                 tournament = t,
                 games = mergedGames,
-                currentGame = active,
+                currentGame = activeWithScores,
                 currentGameShots = shots,
             )
         }.onFailure {
@@ -194,14 +232,32 @@ class TournamentViewModel(
         // Auto-pick winner as highest scorer if caller didn't specify one.
         // Ties break to the participant that appears first in the tournament
         // — deterministic, and matches the order users see in the scoreboard.
+        val gameType = _ui.value.tournament?.gameType ?: ""
+        // Для этих дисциплин победитель — кто забил больше шаров (pointsDelta > 0),
+        // штрафы не влияют на победителя (они финансовые, а не скоринговые для победы).
+        val usePotCount = gameType in setOf(
+            "svobodnaya-piramida", "kombinirovannaya-piramida", "dinamichnaya-piramida"
+        )
         val resolvedWinner = winnerPid ?: run {
             val partIdOrder = _ui.value.tournament?.participants
                 ?.mapIndexed { i, p -> p.id to i }?.toMap() ?: emptyMap()
-            game.scores
-                .maxWithOrNull(
-                    compareBy<com.example.billiardtracker.data.remote.dto.ScoreDto> { it.points }
-                        .thenByDescending { partIdOrder[it.participantId] ?: Int.MAX_VALUE },
-                )?.participantId
+            if (usePotCount) {
+                val potsByPid = _ui.value.currentGameShots
+                    .filter { it.pointsDelta > 0 }
+                    .groupBy { it.participantId }
+                    .mapValues { (_, shots) -> shots.sumOf { it.pointsDelta } }
+                potsByPid.entries
+                    .maxWithOrNull(
+                        compareBy<Map.Entry<Long, Int>> { it.value }
+                            .thenByDescending { partIdOrder[it.key] ?: Int.MAX_VALUE },
+                    )?.key
+            } else {
+                game.scores
+                    .maxWithOrNull(
+                        compareBy<com.example.billiardtracker.data.remote.dto.ScoreDto> { it.points }
+                            .thenByDescending { partIdOrder[it.participantId] ?: Int.MAX_VALUE },
+                    )?.participantId
+            }
         }
         // Task 5 fix: оптимистично помечаем партию finished + winner прямо
         // в _ui. refresh() ниже потом смёржит с сервером; если сервер ещё не
@@ -308,29 +364,42 @@ class TournamentViewModel(
         }
 
     /**
-     * Tournament-wide payout: aggregates scores across every finished game
-     * (not just the last one). This is what the PayoutScreen shows —
-     * per-game payouts wouldn't reflect who actually owes whom by the end.
+     * Tournament-wide payout: aggregates scores across every finished game.
+     * per_match: победитель каждой партии получает moneyPerBallKop (= цена встречи)
+     * от каждого остального участника.
+     * per_ball (дефолт): каждый шар оплачивается по moneyPerBallKop.
      */
     val tournamentPayout: PayoutResult?
         get() {
             val t = _ui.value.tournament ?: return null
             val games = _ui.value.games
             if (games.isEmpty()) return null
+            val inputTournament = PayoutInputTournament(id = t.id, moneyPerBallKop = t.moneyPerBallKop)
+            val inputParticipants = t.participants.map {
+                PayoutInputParticipant(
+                    id = it.id,
+                    handicapPoints = it.handicapPoints,
+                    perBallOverrideKop = it.perBallOverrideKop,
+                )
+            }
+            if (t.stakeMode == "per_match") {
+                val gameWinners = games
+                    .filter { it.status == "finished" }
+                    .map { it.winnerParticipantId }
+                return PayoutCalculator.computePerMatch(
+                    tournament = inputTournament,
+                    participants = inputParticipants,
+                    gameWinners = gameWinners,
+                )
+            }
             val shots = games.flatMap { it.scores }.flatMap { s ->
                 List(s.points.coerceAtLeast(0)) {
                     PayoutInputShot(participantId = s.participantId, kind = "ball", pointsDelta = 1)
                 }
             }
             return PayoutCalculator.compute(
-                tournament = PayoutInputTournament(id = t.id, moneyPerBallKop = t.moneyPerBallKop),
-                participants = t.participants.map {
-                    PayoutInputParticipant(
-                        id = it.id,
-                        handicapPoints = it.handicapPoints,
-                        perBallOverrideKop = it.perBallOverrideKop,
-                    )
-                },
+                tournament = inputTournament,
+                participants = inputParticipants,
                 shots = shots,
             )
         }

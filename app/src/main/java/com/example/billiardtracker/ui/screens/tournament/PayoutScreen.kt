@@ -157,6 +157,44 @@ fun PayoutScreen(
                 }
             }
 
+            // Показываем карточку «Выигрыш» если задана ставка ИЛИ режим «за встречу»
+            // (moneyPerBallKop может быть null если пользователь оставил поле пустым).
+            if (t.moneyPerBallKop != null || t.stakeMode == "per_match") {
+                val netByPid = mutableMapOf<Long, Long>()
+                payout.payouts.forEach { entry ->
+                    netByPid[entry.toParticipantId] =
+                        (netByPid[entry.toParticipantId] ?: 0L) + entry.amountKop
+                    netByPid[entry.fromParticipantId] =
+                        (netByPid[entry.fromParticipantId] ?: 0L) - entry.amountKop
+                }
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Выигрыш", style = MaterialTheme.typography.titleSmall)
+                        participants.forEach { p ->
+                            val net = netByPid[p.id] ?: 0L
+                            val color = when {
+                                net > 0 -> MaterialTheme.colorScheme.primary
+                                net < 0 -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.onSurface
+                            }
+                            val label = when {
+                                net > 0 -> "+${formatRub(net)}"
+                                net < 0 -> formatRub(net)
+                                else -> "0 ₽"
+                            }
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(nameById[p.id] ?: "?", modifier = Modifier.weight(1f))
+                                Text(label, fontWeight = FontWeight.Bold, color = color, softWrap = false, maxLines = 1)
+                            }
+                        }
+                    }
+                }
+            }
+
             val finishedGames = ui.games.filter { it.status == "finished" }
             if (finishedGames.isNotEmpty()) {
                 Card(Modifier.fillMaxWidth()) {

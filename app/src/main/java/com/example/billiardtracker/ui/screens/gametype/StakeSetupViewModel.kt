@@ -43,6 +43,8 @@ data class StakeUiState(
     val ownerPhone: String? = null,
     val loading: Boolean = false,
     val error: String? = null,
+    val minPlayersDialogShown: Boolean = false,
+    val noTeamDialogShown: Boolean = false,
     val createdTournamentId: Long? = null,
 ) {
     /** true если владелец телефона уже в списке участников (по phone-match). */
@@ -70,24 +72,29 @@ class StakeSetupViewModel(
     private val _ui = MutableStateFlow(StakeUiState())
     val ui: StateFlow<StakeUiState> = _ui.asStateFlow()
 
-    // Прокидываем teams/activeTeamId из TeamState как есть — UI подписывается
-    // напрямую на них через collectAsStateWithLifecycle.
     val teams = teamState.teams
-    val activeTeamId = teamState.activeTeamId
+
+    // Локальный выбор состава для этой встречи. Стартует null — участники
+    // пусты до явного тапа по составу. Не связан с teamState.activeTeamId
+    // напрямую, чтобы не подтягивать прошлый активный состав автоматически.
+    private val _selectedTeamId = MutableStateFlow<Long?>(null)
+    val activeTeamId: StateFlow<Long?> = _selectedTeamId.asStateFlow()
+
+    /** Вызывается при тапе по составу в UI. Заполняет Участников и сохраняет в prefs. */
+    fun selectTeam(teamId: Long) {
+        _selectedTeamId.value = teamId
+        teamState.setActiveTeam(teamId)
+    }
 
     init {
         loadFromState()
         viewModelScope.launch { fetchNearbyAndAutoFill() }
         viewModelScope.launch { teamState.refresh() }
-        // v1.24.6: реактивно на смену активного состава + правки в его игроках.
-        // Раньше collect срабатывал только на activeTeamId; если teams-список
-        // ещё не загрузился (refresh() параллельно летит), teamById() возвращал
-        // null и заполнение молча пропускалось — блок «Участники» оставался
-        // пустым до следующего тапа. Также adding player к активной команде
-        // не обновлял perParticipant. combine over (activeTeamId × teams) чинит
-        // оба кейса — эмитит при любом изменении.
+        // Реактивно: если изменился выбранный состав ИЛИ список игроков в нём —
+        // перезаполняем Участников. Реагирует только на _selectedTeamId (локальный),
+        // поэтому при загрузке экрана Участники пусты.
         viewModelScope.launch {
-            combine(teamState.activeTeamId, teamState.teams) { id, teams ->
+            combine(_selectedTeamId, teamState.teams) { id, teams ->
                 id?.let { active -> teams.firstOrNull { it.id == active } }
             }.collect { team ->
                 if (team != null) mergeParticipantsFromTeam(team)
@@ -110,12 +117,18 @@ class StakeSetupViewModel(
         // Если participants уже были положены навигацией (legacy path) — берём их;
         // иначе позже fillParticipantsFromTeam заполнит из активного состава.
         val parts = newTournamentState.participants.value
+        val defaultStakeMode = when (slug) {
+            "svobodnaya-piramida", "kombinirovannaya-piramida", "dinamichnaya-piramida",
+            "svobodnaya-s-prodolzheniem" -> "per_match"
+            else -> "per_ball"
+        }
         _ui.value = _ui.value.copy(
             gameTypeName = gt.displayName,
             gameTypeSlug = slug,
             moneyPlayable = profile.moneyPlayable,
             title = newTournamentState.title.value ?: _ui.value.title,
             stakeRub = _ui.value.stakeRub.ifBlank { "100" },
+            stakeMode = defaultStakeMode,
             gameSize = defaultSize,
             winsRequired = newTournamentState.winsRequired.value ?: 3,
             perParticipant = if (parts.isEmpty()) _ui.value.perParticipant
@@ -149,9 +162,11 @@ class StakeSetupViewModel(
             )
         }
         val teamKeys = fromTeam.map { key(it.displayName, it.phone) }.toSet()
-        // Сохраняем участников, которых нет в команде (напр. владелец, добавленный в этой сессии).
-        val extras = prev.filter { key(it.displayName, it.phone) !in teamKeys }
-        _ui.value = _ui.value.copy(perParticipant = fromTeam + extras)
+        // При смене состава очищаем всё, кроме владельца если он добавлен в этой сессии.
+        val ownerExtra = if (ownerDigits.isNotEmpty())
+            prev.firstOrNull { digits(it.phone) == ownerDigits && key(it.displayName, it.phone) !in teamKeys }
+        else null
+        _ui.value = _ui.value.copy(perParticipant = if (ownerExtra != null) fromTeam + ownerExtra else fromTeam)
     }
 
     /**
@@ -227,7 +242,7 @@ class StakeSetupViewModel(
         val name = _ui.value.ownerName.ifBlank { "Я" }
         val phone = _ui.value.ownerPhone
         if (_ui.value.ownerAlreadyIn) return
-        val teamId = teamState.activeTeamId.value ?: run {
+        val teamId = _selectedTeamId.value ?: run {
             _ui.value = _ui.value.copy(error = "Сначала выбери или создай состав")
             return
         }
@@ -257,7 +272,7 @@ class StakeSetupViewModel(
      * perParticipant без изменения команды.
      */
     fun removeParticipant(idx: Int) {
-        val teamId = teamState.activeTeamId.value
+        val teamId = _selectedTeamId.value
         val team = if (teamId != null) teamState.teamById(teamId) else null
         val ownerDigits = _ui.value.ownerPhone?.filter { it.isDigit() }.orEmpty()
         val nonOwnerSize = team?.players
@@ -278,14 +293,30 @@ class StakeSetupViewModel(
         }
     }
 
+    fun dismissMinPlayersDialog() {
+        _ui.value = _ui.value.copy(minPlayersDialogShown = false)
+    }
+
+    fun dismissNoTeamDialog() {
+        _ui.value = _ui.value.copy(noTeamDialogShown = false)
+    }
+
     fun submit() {
         val slug = _ui.value.gameTypeSlug.ifBlank { newTournamentState.gameType.value.orEmpty() }
         if (slug.isBlank()) {
             _ui.value = _ui.value.copy(error = "Игра не выбрана — вернись назад и выбери")
             return
         }
+        if (_selectedTeamId.value == null) {
+            _ui.value = _ui.value.copy(noTeamDialogShown = true)
+            return
+        }
         if (_ui.value.perParticipant.isEmpty()) {
             _ui.value = _ui.value.copy(error = "Нет игроков — выбери или создай состав ниже")
+            return
+        }
+        if (_ui.value.perParticipant.size < 2) {
+            _ui.value = _ui.value.copy(minPlayersDialogShown = true)
             return
         }
         val moneyKop = _ui.value.stakeRub.toLongOrNull()?.times(100)

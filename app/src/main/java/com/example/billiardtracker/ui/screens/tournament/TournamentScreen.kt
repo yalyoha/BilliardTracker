@@ -29,6 +29,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +65,7 @@ fun TournamentScreen(
     onOpenPayout: () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val kolkhozOrder by viewModel.kolkhozOrder.collectAsStateWithLifecycle()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // Отслеживаем смену маркёра — показываем всем остальным toast "X стал маркёром".
     // SSE не идёт офлайн, поэтому событие увидят только online-участники — норм.
@@ -179,6 +186,46 @@ fun TournamentScreen(
                         Text("${scores[p.id] ?: 0}", fontWeight = FontWeight.Bold)
                     }
                 }
+
+                // Текущий выигрыш — показываем если задана ставка или режим «за встречу».
+                val showWin = t.moneyPerBallKop != null || t.stakeMode == "per_match"
+                if (showWin) {
+                    val tPayout = viewModel.tournamentPayout
+                    if (tPayout != null) {
+                        val netByPid = mutableMapOf<Long, Long>()
+                        tPayout.payouts.forEach { entry ->
+                            netByPid[entry.toParticipantId] =
+                                (netByPid[entry.toParticipantId] ?: 0L) + entry.amountKop
+                            netByPid[entry.fromParticipantId] =
+                                (netByPid[entry.fromParticipantId] ?: 0L) - entry.amountKop
+                        }
+                        androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                        Text("Выигрыш", style = MaterialTheme.typography.titleSmall)
+                        t.participants.forEach { p ->
+                            val net = netByPid[p.id] ?: 0L
+                            val color = when {
+                                net > 0 -> MaterialTheme.colorScheme.primary
+                                net < 0 -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.onSurface
+                            }
+                            val label = when {
+                                net > 0 -> "+${net / 100} ₽"
+                                net < 0 -> "${net / 100} ₽"
+                                else -> "0 ₽"
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    p.effectiveName(ui.myUserId, ui.myLocalName),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(label, fontWeight = FontWeight.Bold, color = color)
+                            }
+                        }
+                    }
+                }
             }
 
             Divider()
@@ -209,6 +256,10 @@ fun TournamentScreen(
                 com.example.billiardtracker.domain.rules.GameType.entries
                     .firstOrNull { it.ruleFileSlug == t.gameType } ?: com.example.billiardtracker.domain.rules.GameType.FREE_PYRAMID
             )
+            val isKolkhoz = t.gameType == "kolkhoz"
+            LaunchedEffect(t.participants) {
+                if (isKolkhoz) viewModel.initKolkhozOrder(t.participants.map { it.id })
+            }
             if (cg == null || cg.status == "finished") {
                 if (ui.isReferee && t.status == "active") {
                     Column(Modifier.padding(16.dp)) {
@@ -235,59 +286,132 @@ fun TournamentScreen(
                     .toSet()
                 val scoresByPid: Map<Long, Int> = cg.scores.associate { it.participantId to it.points }
                 var sheetPid by remember { mutableStateOf<Long?>(null) }
-                // Плитка всегда во всю ширину; для >2 игроков нужен больший
-                // блок, иначе кнопки "+/Штраф/Свой/Чужой" не помещаются.
-                val panelHeight = when (t.participants.size) {
-                    0, 1, 2 -> 420.dp
-                    3 -> 560.dp
-                    4 -> 720.dp
-                    else -> 720.dp
-                }
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(panelHeight),
-                ) {
-                    com.example.billiardtracker.ui.screens.tournament.scorers.MatchLayout(
-                        participants = t.participants,
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                    ) { p ->
-                        com.example.billiardtracker.ui.screens.tournament.scorers.ScoreTile(
-                            name = p.effectiveName(ui.myUserId, ui.myLocalName),
-                            isReferee = t.refereeUserId != null && p.userId == t.refereeUserId,
-                            score = scoresByPid[p.id] ?: 0,
-                        ) {
-                            if (!ui.isReferee) {
-                                Text(
-                                    "наблюдатель",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            } else when (profile.scorerKind) {
-                                com.example.billiardtracker.domain.rules.ScorerKind.Counter ->
-                                    com.example.billiardtracker.ui.screens.tournament.scorers.CounterScorer(
-                                        pid = p.id,
-                                        profile = profile,
-                                        currentScore = scoresByPid[p.id] ?: 0,
-                                        onShot = viewModel::addShot,
-                                        onDecrement = viewModel::decrementScore,
+
+                if (isKolkhoz) {
+                    // Колхоз: вертикальный список игроков с кнопками ▲/▼ для смены очерёдности.
+                    val order = kolkhozOrder ?: t.participants.map { it.id }
+                    val participantsByPid = t.participants.associateBy { it.id }
+                    Column(
+                        Modifier.padding(horizontal = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        order.forEachIndexed { idx, pid ->
+                            val p = participantsByPid[pid] ?: return@forEachIndexed
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                // ▲/▼ кнопки — только маркёру
+                                if (ui.isReferee) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        IconButton(
+                                            onClick = { viewModel.moveKolkhozPlayerUp(pid) },
+                                            enabled = idx > 0,
+                                        ) { Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Вверх") }
+                                        IconButton(
+                                            onClick = { viewModel.moveKolkhozPlayerDown(pid) },
+                                            enabled = idx < order.size - 1,
+                                        ) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Вниз") }
+                                    }
+                                }
+                                // Карточка игрока
+                                Column(
+                                    Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    val marker = if (t.refereeUserId != null && p.userId == t.refereeUserId) " 🎩" else ""
+                                    Row(
+                                        Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            "${idx + 1}. ${p.effectiveName(ui.myUserId, ui.myLocalName)}$marker",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        Text(
+                                            "${scoresByPid[p.id] ?: 0}",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                    if (!ui.isReferee) {
+                                        Text(
+                                            "наблюдатель",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    } else {
+                                        com.example.billiardtracker.ui.screens.tournament.scorers.NumberedBallGridTile(
+                                            pid = p.id,
+                                            onSelect = { sheetPid = it },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Стандартный лейаут для всех дисциплин кроме Колхоза.
+                    val panelHeight = when (t.participants.size) {
+                        0, 1, 2 -> 420.dp
+                        3 -> 560.dp
+                        4 -> 720.dp
+                        else -> 720.dp
+                    }
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(panelHeight),
+                    ) {
+                        com.example.billiardtracker.ui.screens.tournament.scorers.MatchLayout(
+                            participants = t.participants,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        ) { p ->
+                            com.example.billiardtracker.ui.screens.tournament.scorers.ScoreTile(
+                                name = p.effectiveName(ui.myUserId, ui.myLocalName),
+                                isReferee = t.refereeUserId != null && p.userId == t.refereeUserId,
+                                score = scoresByPid[p.id] ?: 0,
+                            ) {
+                                if (!ui.isReferee) {
+                                    Text(
+                                        "наблюдатель",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
-                                com.example.billiardtracker.domain.rules.ScorerKind.Lives ->
-                                    com.example.billiardtracker.ui.screens.tournament.scorers.LivesScorer(
-                                        pid = p.id,
-                                        shots = ui.currentGameShots,
-                                        initialLives = 3,
-                                        onLifeLost = { pid ->
-                                            viewModel.addShot(pid, "life", null, -1)
-                                        },
-                                    )
-                                com.example.billiardtracker.domain.rules.ScorerKind.NumberedBallGrid,
-                                com.example.billiardtracker.domain.rules.ScorerKind.Balance,
-                                com.example.billiardtracker.domain.rules.ScorerKind.Fishki ->
-                                    com.example.billiardtracker.ui.screens.tournament.scorers.NumberedBallGridTile(
-                                        pid = p.id,
-                                        onSelect = { sheetPid = it },
-                                    )
+                                } else when (profile.scorerKind) {
+                                    com.example.billiardtracker.domain.rules.ScorerKind.Counter ->
+                                        com.example.billiardtracker.ui.screens.tournament.scorers.CounterScorer(
+                                            pid = p.id,
+                                            profile = profile,
+                                            currentScore = scoresByPid[p.id] ?: 0,
+                                            onShot = viewModel::addShot,
+                                            onDecrement = viewModel::decrementScore,
+                                        )
+                                    com.example.billiardtracker.domain.rules.ScorerKind.Lives ->
+                                        com.example.billiardtracker.ui.screens.tournament.scorers.LivesScorer(
+                                            pid = p.id,
+                                            shots = ui.currentGameShots,
+                                            initialLives = 3,
+                                            onLifeLost = { pid ->
+                                                viewModel.addShot(pid, "life", null, -1)
+                                            },
+                                        )
+                                    com.example.billiardtracker.domain.rules.ScorerKind.NumberedBallGrid,
+                                    com.example.billiardtracker.domain.rules.ScorerKind.Balance,
+                                    com.example.billiardtracker.domain.rules.ScorerKind.Fishki ->
+                                        com.example.billiardtracker.ui.screens.tournament.scorers.NumberedBallGridTile(
+                                            pid = p.id,
+                                            onSelect = { sheetPid = it },
+                                        )
+                                }
                             }
                         }
                     }
@@ -304,12 +428,31 @@ fun TournamentScreen(
                             append(" · ${p.effectiveName(ui.myUserId, ui.myLocalName)} $s")
                         }
                     }
-                    val autoWinner = t.participants
-                        .maxByOrNull { scoresByPid[it.id] ?: 0 }
+                    val usePotCount = t.gameType in setOf(
+                        "svobodnaya-piramida", "kombinirovannaya-piramida", "dinamichnaya-piramida"
+                    )
+                    val autoWinner = if (usePotCount) {
+                        val potsByPid = ui.currentGameShots
+                            .filter { it.pointsDelta > 0 }
+                            .groupBy { it.participantId }
+                            .mapValues { (_, shots) -> shots.sumOf { it.pointsDelta } }
+                        t.participants.maxByOrNull { potsByPid[it.id] ?: 0 }
+                    } else {
+                        t.participants.maxByOrNull { scoresByPid[it.id] ?: 0 }
+                    }
+                    val autoWinnerScore = if (usePotCount) {
+                        val potsByPid = ui.currentGameShots
+                            .filter { it.pointsDelta > 0 }
+                            .groupBy { it.participantId }
+                            .mapValues { (_, shots) -> shots.sumOf { it.pointsDelta } }
+                        autoWinner?.let { potsByPid[it.id] ?: 0 }
+                    } else {
+                        autoWinner?.let { scoresByPid[it.id] ?: 0 }
+                    }
                     com.example.billiardtracker.ui.screens.tournament.scorers.MatchBottomBar(
                         targetHint = targetHint,
                         winnerName = autoWinner?.effectiveName(ui.myUserId, ui.myLocalName),
-                        winnerScore = autoWinner?.let { scoresByPid[it.id] ?: 0 },
+                        winnerScore = autoWinnerScore,
                         onUndo = viewModel::undoLastShot,
                         onFinish = { viewModel.finishGame() },
                     )

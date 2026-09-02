@@ -26,4 +26,8 @@ interface TournamentDao {
 
     @Query("DELETE FROM tournaments")
     suspend fun deleteAll()
+
+    /** Серверные ID встреч, скрытых пользователем (status = 'local_hidden'). */
+    @Query("SELECT id FROM tournaments WHERE status = 'local_hidden' AND id > 0")
+    suspend fun hiddenServerIds(): List<Long>
 }

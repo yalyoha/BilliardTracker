@@ -36,4 +36,8 @@ class HomeViewModel(
             repo.refreshMine(tokenId)
         }
     }
+
+    fun deleteTournament(id: Long) {
+        viewModelScope.launch { repo.deleteLocal(id) }
+    }
 }

@@ -59,6 +59,9 @@ interface ApiService {
     @POST("api/tournaments")
     suspend fun createTournament(@Body body: CreateTournamentBody): Response<TournamentDto>
 
+    @DELETE("api/tournaments/{id}")
+    suspend fun deleteTournament(@Path("id") id: Long): Response<Unit>
+
     @POST("api/tournaments/{id}/finish")
     suspend fun finishTournament(@Path("id") id: Long): Response<TournamentDto>
 
