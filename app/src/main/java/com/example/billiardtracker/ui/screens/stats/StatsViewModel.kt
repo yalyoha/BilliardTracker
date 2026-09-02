@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.billiardtracker.data.local.dao.GameDao
 import com.example.billiardtracker.data.local.dao.ParticipantDao
+import com.example.billiardtracker.data.local.dao.ShotDao
 import com.example.billiardtracker.data.local.entity.TournamentEntity
 import com.example.billiardtracker.data.prefs.UserPrefs
 import com.example.billiardtracker.data.remote.ApiService
@@ -44,6 +45,9 @@ data class OpponentStat(
 data class LocalStats(
     val byDiscipline: List<DisciplineStat>,
     val byOpponent: List<OpponentStat>,
+    val totalBalls: Int,
+    val gamesPlayed: Int,
+    val gamesWon: Int,
 )
 
 class StatsViewModel(
@@ -52,6 +56,7 @@ class StatsViewModel(
     private val tournamentRepo: TournamentRepository,
     private val gameDao: GameDao,
     private val participantDao: ParticipantDao,
+    private val shotDao: ShotDao,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(StatsUiState())
     val ui: StateFlow<StatsUiState> = _ui.asStateFlow()
@@ -89,6 +94,7 @@ class StatsViewModel(
     ): LocalStats {
         val allGames = gameDao.listAll()
         val allParticipants = participantDao.listAll()
+        val allShots = shotDao.listAll()
 
         val gamesByTid = allGames.groupBy { it.tournamentId }
         val participantsByTid = allParticipants.groupBy { it.tournamentId }
@@ -102,12 +108,21 @@ class StatsViewModel(
         val oppPlayed = mutableMapOf<String, Int>()
         val oppWon = mutableMapOf<String, Int>()
 
+        // Собираем все participantId которые принадлежат мне, чтобы посчитать шары
+        val myParticipantIds = mutableSetOf<Long>()
+        var totalGamesPlayed = 0
+        var totalGamesWon = 0
+
         for (t in tournaments) {
             val participants = participantsByTid[t.id] ?: continue
             val myPart = participants.firstOrNull { it.userId == myUserId } ?: continue
+            myParticipantIds.add(myPart.id)
+
             val games = (gamesByTid[t.id] ?: emptyList()).filter { it.status == "finished" }
             val played = games.size
             val won = games.count { it.winnerParticipantId == myPart.id }
+            totalGamesPlayed += played
+            totalGamesWon += won
 
             val slug = t.gameType
             discMeetings[slug] = (discMeetings[slug] ?: 0) + 1
@@ -123,6 +138,11 @@ class StatsViewModel(
                 oppWon[key] = (oppWon[key] ?: 0) + won
             }
         }
+
+        // Считаем шары: только позитивные удары (забитые) среди моих участников
+        val totalBalls = allShots
+            .filter { it.participantId in myParticipantIds && it.pointsDelta > 0 }
+            .sumOf { it.pointsDelta }
 
         return LocalStats(
             byDiscipline = discMeetings.keys
@@ -146,6 +166,9 @@ class StatsViewModel(
                         gamesWon = oppWon[key] ?: 0,
                     )
                 },
+            totalBalls = totalBalls,
+            gamesPlayed = totalGamesPlayed,
+            gamesWon = totalGamesWon,
         )
     }
 

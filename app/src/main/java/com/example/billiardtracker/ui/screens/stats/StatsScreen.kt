@@ -54,7 +54,7 @@ fun StatsScreen(
             }
 
             when (selectedTab) {
-                0 -> TabTotal(ui = ui, finished = finished, onOpenPayout = onOpenPayout)
+                0 -> TabTotal(ui = ui, localStats = localStats, finished = finished, onOpenPayout = onOpenPayout)
                 1 -> TabByDiscipline(localStats = localStats)
                 2 -> TabByOpponent(localStats = localStats)
             }
@@ -65,6 +65,7 @@ fun StatsScreen(
 @Composable
 private fun TabTotal(
     ui: StatsUiState,
+    localStats: LocalStats?,
     finished: List<com.example.billiardtracker.data.local.entity.TournamentEntity>,
     onOpenPayout: (Long) -> Unit,
 ) {
@@ -76,30 +77,35 @@ private fun TabTotal(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         val s = ui.stats
-        if (ui.loading && s == null) {
+        if (ui.loading && s == null && localStats == null) {
             Text("Загрузка…", style = MaterialTheme.typography.bodyMedium)
-        } else if (s == null) {
-            Text(
-                ui.error ?: "Нет данных",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium,
-            )
         } else {
-            StatCard {
-                StatRow("Встреч всего", "${s.tournaments.total}")
-                StatRow("Активных", "${s.tournaments.active}")
-                StatRow("Завершённых", "${s.tournaments.finished}")
+            // Встречи — с сервера (там учитываются встречи других участников)
+            if (s != null) {
+                StatCard {
+                    StatRow("Встреч всего", "${s.tournaments.total}")
+                    StatRow("Активных", "${s.tournaments.active}")
+                    StatRow("Завершённых", "${s.tournaments.finished}")
+                }
             }
+            // Партии и шары — считаются локально из базы (сервер мог считать неверно)
+            val gamesPlayed = localStats?.gamesPlayed ?: s?.games?.played ?: 0
+            val gamesWon = localStats?.gamesWon ?: s?.games?.won ?: 0
+            val totalBalls = localStats?.totalBalls ?: s?.score?.totalBalls ?: 0
             StatCard {
                 Text("Партии", style = MaterialTheme.typography.titleSmall)
-                StatRow("Сыграно", "${s.games.played}")
-                StatRow("Побед", "${s.games.won}")
-                StatRow("Процент побед", "%.1f%%".format(s.games.winRate))
+                StatRow("Сыграно", "$gamesPlayed")
+                StatRow("Побед", "$gamesWon")
+                if (gamesPlayed > 0) {
+                    StatRow("Процент побед", "%.1f%%".format(gamesWon.toDouble() / gamesPlayed * 100))
+                }
             }
             StatCard {
                 Text("Счёт", style = MaterialTheme.typography.titleSmall)
-                StatRow("Всего забито шаров", "${s.score.totalBalls}")
-                StatRow("В среднем за партию", "%.1f".format(s.score.avgPerGame))
+                StatRow("Всего забито шаров", "$totalBalls")
+                if (gamesPlayed > 0) {
+                    StatRow("В среднем за партию", "%.1f".format(totalBalls.toDouble() / gamesPlayed))
+                }
             }
         }
 

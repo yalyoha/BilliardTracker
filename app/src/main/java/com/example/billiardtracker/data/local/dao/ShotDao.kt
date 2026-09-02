@@ -31,4 +31,7 @@ interface ShotDao {
     /** После sync create_tournament — participantId у существующих shots. */
     @Query("UPDATE shots SET participantId = :newPid WHERE participantId = :oldPid")
     suspend fun remapParticipantId(oldPid: Long, newPid: Long)
+
+    @Query("SELECT * FROM shots")
+    suspend fun listAll(): List<ShotEntity>
 }

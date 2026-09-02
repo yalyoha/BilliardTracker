@@ -230,7 +230,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                 )
             }
             composable(Route.Stats.path) {
-                val vm = StatsViewModel(container.apiService, container.userPrefs, container.tournamentRepository, container.gameDao, container.participantDao)
+                val vm = StatsViewModel(container.apiService, container.userPrefs, container.tournamentRepository, container.gameDao, container.participantDao, container.shotDao)
                 StatsScreen(
                     viewModel = vm,
                     onOpenPayout = { id -> nav.navigate(Route.Payout.build(id)) },
