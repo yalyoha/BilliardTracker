@@ -358,9 +358,24 @@ fun TournamentScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     } else {
-                                        com.example.billiardtracker.ui.screens.tournament.scorers.NumberedBallGridTile(
+                                        val kolkhozOnShot: (Long, String, Int?, Int) -> Unit =
+                                            { shotPid, kind, ballNum, delta ->
+                                                viewModel.addShot(shotPid, kind, ballNum, delta)
+                                                if (delta > 0) {
+                                                    val ord = kolkhozOrder ?: t.participants.map { it.id }
+                                                    val shotIdx = ord.indexOf(shotPid)
+                                                    if (shotIdx >= 0 && ord.size > 1) {
+                                                        val prevPid = ord[(shotIdx - 1 + ord.size) % ord.size]
+                                                        viewModel.addShot(prevPid, "foul", null, -1)
+                                                    }
+                                                }
+                                            }
+                                        com.example.billiardtracker.ui.screens.tournament.scorers.CounterScorer(
                                             pid = p.id,
-                                            onSelect = { sheetPid = it },
+                                            profile = profile,
+                                            currentScore = scoresByPid[p.id] ?: 0,
+                                            onShot = kolkhozOnShot,
+                                            onDecrement = viewModel::decrementScore,
                                         )
                                     }
                                 }
@@ -469,27 +484,12 @@ fun TournamentScreen(
                 sheetPid?.let { pid ->
                     val name = t.participants.firstOrNull { it.id == pid }
                         ?.effectiveName(ui.myUserId, ui.myLocalName) ?: ""
-                    val onShotForSheet: (Long, String, Int?, Int) -> Unit = if (isKolkhoz) {
-                        { shotPid, kind, ballNum, delta ->
-                            viewModel.addShot(shotPid, kind, ballNum, delta)
-                            if (delta > 0) {
-                                val ord = kolkhozOrder ?: t.participants.map { it.id }
-                                val idx = ord.indexOf(shotPid)
-                                if (idx >= 0 && ord.size > 1) {
-                                    val prevPid = ord[(idx - 1 + ord.size) % ord.size]
-                                    viewModel.addShot(prevPid, "foul", null, -1)
-                                }
-                            }
-                        }
-                    } else {
-                        viewModel::addShot
-                    }
                     com.example.billiardtracker.ui.screens.tournament.scorers.NumberedBallGridSheet(
                         selectedPid = pid,
                         selectedName = name,
                         pottedBalls = pottedBalls,
                         onDismiss = { sheetPid = null },
-                        onShot = onShotForSheet,
+                        onShot = viewModel::addShot,
                     )
                 }
             }
