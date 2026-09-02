@@ -80,7 +80,6 @@ private fun TabTotal(
         if (ui.loading && s == null && localStats == null) {
             Text("Загрузка…", style = MaterialTheme.typography.bodyMedium)
         } else {
-            // Встречи — с сервера (там учитываются встречи других участников)
             if (s != null) {
                 StatCard {
                     StatRow("Встреч всего", "${s.tournaments.total}")
@@ -88,10 +87,8 @@ private fun TabTotal(
                     StatRow("Завершённых", "${s.tournaments.finished}")
                 }
             }
-            // Партии и шары — считаются локально из базы (сервер мог считать неверно)
             val gamesPlayed = localStats?.gamesPlayed ?: s?.games?.played ?: 0
             val gamesWon = localStats?.gamesWon ?: s?.games?.won ?: 0
-            val totalBalls = localStats?.totalBalls ?: s?.score?.totalBalls ?: 0
             StatCard {
                 Text("Партии", style = MaterialTheme.typography.titleSmall)
                 StatRow("Сыграно", "$gamesPlayed")
@@ -100,12 +97,14 @@ private fun TabTotal(
                     StatRow("Процент побед", "%.1f%%".format(gamesWon.toDouble() / gamesPlayed * 100))
                 }
             }
-            StatCard {
-                Text("Счёт", style = MaterialTheme.typography.titleSmall)
-                StatRow("Всего забито шаров", "$totalBalls")
-                if (gamesPlayed > 0) {
-                    StatRow("В среднем за партию", "%.1f".format(totalBalls.toDouble() / gamesPlayed))
-                }
+            if (localStats != null) {
+                BallStatCard(
+                    totalBalls = localStats.totalBalls,
+                    foreignBalls = localStats.foreignBalls,
+                    ownBalls = localStats.ownBalls,
+                    fouls = localStats.fouls,
+                    gamesPlayed = gamesPlayed,
+                )
             }
         }
 
@@ -161,9 +160,15 @@ private fun TabByDiscipline(localStats: LocalStats?) {
                 StatRow("Партий сыграно", "${d.gamesPlayed}")
                 StatRow("Партий выиграно", "${d.gamesWon}")
                 if (d.gamesPlayed > 0) {
-                    val pct = d.gamesWon.toDouble() / d.gamesPlayed * 100
-                    StatRow("Процент побед", "%.1f%%".format(pct))
+                    StatRow("Процент побед", "%.1f%%".format(d.gamesWon.toDouble() / d.gamesPlayed * 100))
                 }
+                BallStatRows(
+                    totalBalls = d.foreignBalls + d.ownBalls,
+                    foreignBalls = d.foreignBalls,
+                    ownBalls = d.ownBalls,
+                    fouls = d.fouls,
+                    gamesPlayed = d.gamesPlayed,
+                )
             }
         }
     }
@@ -193,11 +198,48 @@ private fun TabByOpponent(localStats: LocalStats?) {
                 StatRow("Партий сыграно", "${o.gamesPlayed}")
                 StatRow("Партий выиграно", "${o.gamesWon}")
                 if (o.gamesPlayed > 0) {
-                    val pct = o.gamesWon.toDouble() / o.gamesPlayed * 100
-                    StatRow("Процент побед", "%.1f%%".format(pct))
+                    StatRow("Процент побед", "%.1f%%".format(o.gamesWon.toDouble() / o.gamesPlayed * 100))
                 }
+                BallStatRows(
+                    totalBalls = o.foreignBalls + o.ownBalls,
+                    foreignBalls = o.foreignBalls,
+                    ownBalls = o.ownBalls,
+                    fouls = o.fouls,
+                    gamesPlayed = o.gamesPlayed,
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun BallStatCard(
+    totalBalls: Int,
+    foreignBalls: Int,
+    ownBalls: Int,
+    fouls: Int,
+    gamesPlayed: Int,
+) {
+    StatCard {
+        Text("Счёт", style = MaterialTheme.typography.titleSmall)
+        BallStatRows(totalBalls, foreignBalls, ownBalls, fouls, gamesPlayed)
+    }
+}
+
+@Composable
+private fun BallStatRows(
+    totalBalls: Int,
+    foreignBalls: Int,
+    ownBalls: Int,
+    fouls: Int,
+    gamesPlayed: Int,
+) {
+    StatRow("Забито шаров", "$totalBalls")
+    StatRow("  Чужой", "$foreignBalls")
+    StatRow("  Свой (свояк)", "$ownBalls")
+    StatRow("Штрафов", "$fouls")
+    if (gamesPlayed > 0) {
+        StatRow("Шаров за партию", "%.1f".format(totalBalls.toDouble() / gamesPlayed))
     }
 }
 
