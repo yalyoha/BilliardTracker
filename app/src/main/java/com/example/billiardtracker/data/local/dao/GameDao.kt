@@ -12,6 +12,9 @@ interface GameDao {
     @Query("SELECT * FROM games WHERE tournamentId = :tournamentId ORDER BY orderIndex ASC")
     fun observeByTournament(tournamentId: Long): Flow<List<GameEntity>>
 
+    @Query("SELECT * FROM games")
+    suspend fun listAll(): List<GameEntity>
+
     @Query("SELECT * FROM games WHERE id = :id")
     suspend fun getById(id: Long): GameEntity?
 

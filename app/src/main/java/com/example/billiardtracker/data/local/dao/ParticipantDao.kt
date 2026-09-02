@@ -29,4 +29,7 @@ interface ParticipantDao {
 
     @Query("DELETE FROM participants WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("SELECT * FROM participants")
+    suspend fun listAll(): List<ParticipantEntity>
 }
