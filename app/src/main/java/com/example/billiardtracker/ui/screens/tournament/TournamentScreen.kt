@@ -200,7 +200,7 @@ fun TournamentScreen(
                                 (netByPid[entry.fromParticipantId] ?: 0L) - entry.amountKop
                         }
                         androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                        Text("Выигрыш", style = MaterialTheme.typography.titleSmall)
+                        Text("Итого по встрече", style = MaterialTheme.typography.titleSmall)
                         t.participants.forEach { p ->
                             val net = netByPid[p.id] ?: 0L
                             val color = when {
@@ -460,12 +460,27 @@ fun TournamentScreen(
                 sheetPid?.let { pid ->
                     val name = t.participants.firstOrNull { it.id == pid }
                         ?.effectiveName(ui.myUserId, ui.myLocalName) ?: ""
+                    val onShotForSheet: (Long, String, Int?, Int) -> Unit = if (isKolkhoz) {
+                        { shotPid, kind, ballNum, delta ->
+                            viewModel.addShot(shotPid, kind, ballNum, delta)
+                            if (delta > 0) {
+                                val ord = kolkhozOrder ?: t.participants.map { it.id }
+                                val idx = ord.indexOf(shotPid)
+                                if (idx >= 0 && ord.size > 1) {
+                                    val prevPid = ord[(idx - 1 + ord.size) % ord.size]
+                                    viewModel.addShot(prevPid, "foul", null, -1)
+                                }
+                            }
+                        }
+                    } else {
+                        viewModel::addShot
+                    }
                     com.example.billiardtracker.ui.screens.tournament.scorers.NumberedBallGridSheet(
                         selectedPid = pid,
                         selectedName = name,
                         pottedBalls = pottedBalls,
                         onDismiss = { sheetPid = null },
-                        onShot = viewModel::addShot,
+                        onShot = onShotForSheet,
                     )
                 }
             }

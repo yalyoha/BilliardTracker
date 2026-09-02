@@ -97,47 +97,24 @@ object PayoutCalculator {
     }
 
     /**
-     * Расчёт для Колхоза: moneyPerBallKop — итоговая сумма ЗАБИВШЕМУ за 1 шар.
-     * При N игроках с каждого соперника берётся priceKop / (N-1), чтобы в сумме
-     * забивший получал ровно priceKop, независимо от числа участников.
+     * Расчёт для Колхоза (двусторонний): когда A забивает шар, UI автоматически
+     * начисляет -1 предыдущему игроку B. Итоговый расчёт: net_X = rawScore_X × priceKop.
+     * rawScores включают как +1 (забитые шары), так и -1 (автоначисленные минусы).
      */
-    fun computeKolkhoz(
+    fun computeKolkhozBilateral(
         tournament: PayoutInputTournament,
         participants: List<PayoutInputParticipant>,
-        shots: List<PayoutInputShot>,
+        rawScores: Map<Long, Int>,
     ): PayoutResult {
-        val priceKop = tournament.moneyPerBallKop ?: return PayoutResult(emptyMap(), emptyList())
-        val n = participants.size
-        if (n < 2) return PayoutResult(emptyMap(), emptyList())
-        val adjustedRate = priceKop / (n - 1)
-        if (adjustedRate == 0L) return PayoutResult(emptyMap(), emptyList())
-
-        val scores = mutableMapOf<Long, Int>()
-        for (p in participants) scores[p.id] = 0
-        for (s in shots) {
-            if (scores.containsKey(s.participantId)) {
-                scores[s.participantId] = scores[s.participantId]!! + s.pointsDelta
-            }
-        }
+        val priceKop = tournament.moneyPerBallKop ?: return PayoutResult(rawScores, emptyList())
+        if (participants.size < 2) return PayoutResult(rawScores, emptyList())
 
         val net = mutableMapOf<Long, Long>()
-        val ids = participants.map { it.id }.sorted()
-        for (i in ids.indices) {
-            for (j in i + 1 until ids.size) {
-                val a = ids[i]; val b = ids[j]
-                val diff = (scores[a] ?: 0) - (scores[b] ?: 0)
-                if (diff == 0) continue
-                val amount = kotlin.math.abs(diff.toLong()) * adjustedRate
-                if (diff > 0) {
-                    net[a] = (net[a] ?: 0L) + amount
-                    net[b] = (net[b] ?: 0L) - amount
-                } else {
-                    net[b] = (net[b] ?: 0L) + amount
-                    net[a] = (net[a] ?: 0L) - amount
-                }
-            }
+        for (p in participants) {
+            net[p.id] = (rawScores[p.id] ?: 0).toLong() * priceKop
         }
-        return PayoutResult(scores, settleNet(net))
+
+        return PayoutResult(rawScores, settleNet(net))
     }
 
     /**
