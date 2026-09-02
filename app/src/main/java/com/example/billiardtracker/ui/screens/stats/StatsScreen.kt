@@ -1,6 +1,8 @@
 package com.example.billiardtracker.ui.screens.stats
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -154,22 +156,15 @@ private fun TabByDiscipline(localStats: LocalStats?) {
             return@Column
         }
         localStats.byDiscipline.forEach { d ->
-            StatCard {
-                Text(d.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                StatRow("Встреч", "${d.meetings}")
-                StatRow("Партий сыграно", "${d.gamesPlayed}")
-                StatRow("Партий выиграно", "${d.gamesWon}")
-                if (d.gamesPlayed > 0) {
-                    StatRow("Процент побед", "%.1f%%".format(d.gamesWon.toDouble() / d.gamesPlayed * 100))
-                }
-                BallStatRows(
-                    totalBalls = d.foreignBalls + d.ownBalls,
-                    foreignBalls = d.foreignBalls,
-                    ownBalls = d.ownBalls,
-                    fouls = d.fouls,
-                    gamesPlayed = d.gamesPlayed,
-                )
-            }
+            DisciplineCard(
+                name = d.displayName,
+                meetings = d.meetings,
+                gamesPlayed = d.gamesPlayed,
+                gamesWon = d.gamesWon,
+                foreignBalls = d.foreignBalls,
+                ownBalls = d.ownBalls,
+                fouls = d.fouls,
+            )
         }
     }
 }
@@ -240,6 +235,51 @@ private fun BallStatRows(
     StatRow("Штрафов", "$fouls")
     if (gamesPlayed > 0) {
         StatRow("Шаров за партию", "%.1f".format(totalBalls.toDouble() / gamesPlayed))
+    }
+}
+
+@Composable
+private fun DisciplineCard(
+    name: String,
+    meetings: Int,
+    gamesPlayed: Int,
+    gamesWon: Int,
+    foreignBalls: Int,
+    ownBalls: Int,
+    fouls: Int,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.primaryContainer)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        ) {
+            Text(
+                name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+        Column(
+            Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            StatRow("Встреч", "$meetings")
+            StatRow("Партий сыграно", "$gamesPlayed")
+            StatRow("Партий выиграно", "$gamesWon")
+            if (gamesPlayed > 0) {
+                StatRow("Процент побед", "%.1f%%".format(gamesWon.toDouble() / gamesPlayed * 100))
+            }
+            BallStatRows(
+                totalBalls = foreignBalls + ownBalls,
+                foreignBalls = foreignBalls,
+                ownBalls = ownBalls,
+                fouls = fouls,
+                gamesPlayed = gamesPlayed,
+            )
+        }
     }
 }
 
