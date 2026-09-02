@@ -157,7 +157,9 @@ fun PayoutScreen(
                 }
             }
 
-            if (t.moneyPerBallKop != null) {
+            // Показываем карточку «Выигрыш» если задана ставка ИЛИ режим «за встречу»
+            // (moneyPerBallKop может быть null если пользователь оставил поле пустым).
+            if (t.moneyPerBallKop != null || t.stakeMode == "per_match") {
                 val netByPid = mutableMapOf<Long, Long>()
                 payout.payouts.forEach { entry ->
                     netByPid[entry.toParticipantId] =
