@@ -107,6 +107,15 @@ fun TournamentScreen(
             }
             val t = ui.tournament ?: return@Column
 
+            val disciplineName = com.example.billiardtracker.domain.rules.GameType.entries
+                .firstOrNull { it.ruleFileSlug == t.gameType }?.displayName ?: t.gameType
+            Text(
+                disciplineName,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
             // Wins per participant (winner_participant_id of finished games).
             val winsByPid: Map<Long, Int> = ui.games
                 .mapNotNull { it.winnerParticipantId }
