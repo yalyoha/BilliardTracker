@@ -186,6 +186,46 @@ fun TournamentScreen(
                         Text("${scores[p.id] ?: 0}", fontWeight = FontWeight.Bold)
                     }
                 }
+
+                // Текущий выигрыш — показываем если задана ставка или режим «за встречу».
+                val showWin = t.moneyPerBallKop != null || t.stakeMode == "per_match"
+                if (showWin) {
+                    val tPayout = viewModel.tournamentPayout
+                    if (tPayout != null) {
+                        val netByPid = mutableMapOf<Long, Long>()
+                        tPayout.payouts.forEach { entry ->
+                            netByPid[entry.toParticipantId] =
+                                (netByPid[entry.toParticipantId] ?: 0L) + entry.amountKop
+                            netByPid[entry.fromParticipantId] =
+                                (netByPid[entry.fromParticipantId] ?: 0L) - entry.amountKop
+                        }
+                        androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                        Text("Выигрыш", style = MaterialTheme.typography.titleSmall)
+                        t.participants.forEach { p ->
+                            val net = netByPid[p.id] ?: 0L
+                            val color = when {
+                                net > 0 -> MaterialTheme.colorScheme.primary
+                                net < 0 -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.onSurface
+                            }
+                            val label = when {
+                                net > 0 -> "+${net / 100} ₽"
+                                net < 0 -> "${net / 100} ₽"
+                                else -> "0 ₽"
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    p.effectiveName(ui.myUserId, ui.myLocalName),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(label, fontWeight = FontWeight.Bold, color = color)
+                            }
+                        }
+                    }
+                }
             }
 
             Divider()
