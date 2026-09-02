@@ -350,17 +350,27 @@ class TournamentViewModel(
                     PayoutInputShot(participantId = s.participantId, kind = "ball", pointsDelta = 1)
                 }
             }
-            return PayoutCalculator.compute(
-                tournament = PayoutInputTournament(id = t.id, moneyPerBallKop = t.moneyPerBallKop),
-                participants = t.participants.map {
-                    PayoutInputParticipant(
-                        id = it.id,
-                        handicapPoints = it.handicapPoints,
-                        perBallOverrideKop = it.perBallOverrideKop,
-                    )
-                },
-                shots = shots,
-            )
+            val inputTournament = PayoutInputTournament(id = t.id, moneyPerBallKop = t.moneyPerBallKop)
+            val inputParticipants = t.participants.map {
+                PayoutInputParticipant(
+                    id = it.id,
+                    handicapPoints = it.handicapPoints,
+                    perBallOverrideKop = it.perBallOverrideKop,
+                )
+            }
+            return if (t.gameType == "kolkhoz") {
+                PayoutCalculator.computeKolkhoz(
+                    tournament = inputTournament,
+                    participants = inputParticipants,
+                    shots = shots,
+                )
+            } else {
+                PayoutCalculator.compute(
+                    tournament = inputTournament,
+                    participants = inputParticipants,
+                    shots = shots,
+                )
+            }
         }
 
     /**
@@ -397,10 +407,18 @@ class TournamentViewModel(
                     PayoutInputShot(participantId = s.participantId, kind = "ball", pointsDelta = 1)
                 }
             }
-            return PayoutCalculator.compute(
-                tournament = inputTournament,
-                participants = inputParticipants,
-                shots = shots,
-            )
+            return if (t.gameType == "kolkhoz") {
+                PayoutCalculator.computeKolkhoz(
+                    tournament = inputTournament,
+                    participants = inputParticipants,
+                    shots = shots,
+                )
+            } else {
+                PayoutCalculator.compute(
+                    tournament = inputTournament,
+                    participants = inputParticipants,
+                    shots = shots,
+                )
+            }
         }
 }
