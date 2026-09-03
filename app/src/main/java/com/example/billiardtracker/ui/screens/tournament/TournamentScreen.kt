@@ -106,6 +106,9 @@ fun TournamentScreen(
                 return@Column
             }
             val t = ui.tournament ?: return@Column
+            val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.let {
+                it.screenWidthDp > it.screenHeightDp
+            }
 
             val disciplineName = com.example.billiardtracker.domain.rules.GameType.entries
                 .firstOrNull { it.ruleFileSlug == t.gameType }?.displayName ?: t.gameType
@@ -168,45 +171,75 @@ fun TournamentScreen(
             }
 
             // Scoreboard текущей партии + счёт побед по турниру.
-            Column(
-                Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    if (target != null) "Играем до $target побед" else "Счёт партии",
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                val scores =
-                    ui.currentGame?.scores?.associate { it.participantId to it.points } ?: emptyMap()
-                t.participants.forEach { p ->
-                    Row(
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        val marker =
-                            if (t.refereeUserId != null && p.userId == t.refereeUserId) " 🎩" else ""
+            val scoreboardScores =
+                ui.currentGame?.scores?.associate { it.participantId to it.points } ?: emptyMap()
+            if (isLandscape) {
+                // Пейзаж: компактная горизонтальная строка
+                Row(
+                    Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        if (target != null) "До $target:" else "Счёт:",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    t.participants.forEach { p ->
+                        val marker = if (t.refereeUserId != null && p.userId == t.refereeUserId) "🎩 " else ""
                         val name = p.effectiveName(ui.myUserId, ui.myLocalName)
                         val wins = winsByPid[p.id] ?: 0
-                        val winsSuffix = target?.let { " · $wins/$it побед" } ?: " · $wins побед"
+                        val score = scoreboardScores[p.id] ?: 0
+                        val winsStr = target?.let { "($wins/$it)" } ?: "($wins)"
                         Text(
-                            "$name$marker$winsSuffix",
+                            "$marker$name $winsStr: $score",
+                            fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f),
                         )
-                        Text("${scores[p.id] ?: 0}", fontWeight = FontWeight.Bold)
+                    }
+                    if (t.gameType == "kolkhoz" && ui.currentGame != null) {
+                        val pottedCount = ui.currentGameShots.count { it.pointsDelta > 0 }
+                        Text("Шаров: ${(15 - pottedCount).coerceAtLeast(0)}", fontWeight = FontWeight.Bold)
                     }
                 }
-
-                // Осталось шаров на столе (только Колхоз).
-                if (t.gameType == "kolkhoz" && ui.currentGame != null) {
-                    val pottedCount = ui.currentGameShots.count { it.pointsDelta > 0 }
-                    val remaining = (15 - pottedCount).coerceAtLeast(0)
-                    androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Осталось шаров на столе")
-                        Text("$remaining", fontWeight = FontWeight.Bold)
+            } else {
+                // Портрет: вертикальный список
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        if (target != null) "Играем до $target побед" else "Счёт партии",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    t.participants.forEach { p ->
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            val marker =
+                                if (t.refereeUserId != null && p.userId == t.refereeUserId) " 🎩" else ""
+                            val name = p.effectiveName(ui.myUserId, ui.myLocalName)
+                            val wins = winsByPid[p.id] ?: 0
+                            val winsSuffix = target?.let { " · $wins/$it побед" } ?: " · $wins побед"
+                            Text(
+                                "$name$marker$winsSuffix",
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text("${scoreboardScores[p.id] ?: 0}", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    // Осталось шаров на столе (только Колхоз).
+                    if (t.gameType == "kolkhoz" && ui.currentGame != null) {
+                        val pottedCount = ui.currentGameShots.count { it.pointsDelta > 0 }
+                        val remaining = (15 - pottedCount).coerceAtLeast(0)
+                        androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Осталось шаров на столе")
+                            Text("$remaining", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -483,32 +516,63 @@ fun TournamentScreen(
                             (netByPid[entry.fromParticipantId] ?: 0L) - entry.amountKop
                     }
                     Divider()
-                    Column(
-                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text("Итого по встрече", style = MaterialTheme.typography.titleSmall)
-                        t.participants.forEach { p ->
-                            val net = netByPid[p.id] ?: 0L
-                            val color = when {
-                                net > 0 -> MaterialTheme.colorScheme.primary
-                                net < 0 -> MaterialTheme.colorScheme.error
-                                else -> MaterialTheme.colorScheme.onSurface
-                            }
-                            val label = when {
-                                net > 0 -> "+${net / 100} ₽"
-                                net < 0 -> "${net / 100} ₽"
-                                else -> "0 ₽"
-                            }
-                            Row(
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
+                    if (isLandscape) {
+                        // Пейзаж: компактная горизонтальная строка
+                        Row(
+                            Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("Итого:", style = MaterialTheme.typography.titleSmall)
+                            t.participants.forEach { p ->
+                                val net = netByPid[p.id] ?: 0L
+                                val color = when {
+                                    net > 0 -> MaterialTheme.colorScheme.primary
+                                    net < 0 -> MaterialTheme.colorScheme.error
+                                    else -> MaterialTheme.colorScheme.onSurface
+                                }
+                                val label = when {
+                                    net > 0 -> "+${net / 100} ₽"
+                                    net < 0 -> "${net / 100} ₽"
+                                    else -> "0 ₽"
+                                }
                                 Text(
-                                    p.effectiveName(ui.myUserId, ui.myLocalName),
+                                    "${p.effectiveName(ui.myUserId, ui.myLocalName)}: $label",
+                                    fontWeight = FontWeight.Bold,
+                                    color = color,
                                     modifier = Modifier.weight(1f),
                                 )
-                                Text(label, fontWeight = FontWeight.Bold, color = color)
+                            }
+                        }
+                    } else {
+                        // Портрет: вертикальный список
+                        Column(
+                            Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text("Итого по встрече", style = MaterialTheme.typography.titleSmall)
+                            t.participants.forEach { p ->
+                                val net = netByPid[p.id] ?: 0L
+                                val color = when {
+                                    net > 0 -> MaterialTheme.colorScheme.primary
+                                    net < 0 -> MaterialTheme.colorScheme.error
+                                    else -> MaterialTheme.colorScheme.onSurface
+                                }
+                                val label = when {
+                                    net > 0 -> "+${net / 100} ₽"
+                                    net < 0 -> "${net / 100} ₽"
+                                    else -> "0 ₽"
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text(
+                                        p.effectiveName(ui.myUserId, ui.myLocalName),
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Text(label, fontWeight = FontWeight.Bold, color = color)
+                                }
                             }
                         }
                     }

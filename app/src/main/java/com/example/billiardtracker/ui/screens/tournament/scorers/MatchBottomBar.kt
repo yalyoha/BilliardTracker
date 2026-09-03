@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -35,24 +36,46 @@ fun MatchBottomBar(
     modifier: Modifier = Modifier,
 ) {
     var confirmOpen by remember { mutableStateOf(false) }
-    Column(
-        modifier.fillMaxWidth().padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(
-            targetHint,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    val isLandscape = LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
+    if (isLandscape) {
         Row(
-            Modifier.fillMaxWidth(),
+            modifier.fillMaxWidth().padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
-            OutlinedButton(onClick = onUndo, modifier = Modifier.weight(1f)) {
+            Text(
+                targetHint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedButton(onClick = onUndo, modifier = Modifier.weight(0.8f)) {
                 Text("↶ Отменить")
             }
             Button(onClick = { confirmOpen = true }, modifier = Modifier.weight(1f)) {
                 Text("Партия окончена")
+            }
+        }
+    } else {
+        Column(
+            modifier.fillMaxWidth().padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                targetHint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(onClick = onUndo, modifier = Modifier.weight(1f)) {
+                    Text("↶ Отменить")
+                }
+                Button(onClick = { confirmOpen = true }, modifier = Modifier.weight(1f)) {
+                    Text("Партия окончена")
+                }
             }
         }
     }
