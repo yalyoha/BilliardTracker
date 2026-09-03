@@ -288,11 +288,11 @@ fun TournamentScreen(
                                 // ▲/▼ кнопки — только маркёру
                                 if (ui.isReferee) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        IconButton(
+                                        androidx.compose.material3.FilledTonalIconButton(
                                             onClick = { viewModel.moveKolkhozPlayerUp(pid) },
                                             enabled = idx > 0,
                                         ) { Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Вверх") }
-                                        IconButton(
+                                        androidx.compose.material3.FilledTonalIconButton(
                                             onClick = { viewModel.moveKolkhozPlayerDown(pid) },
                                             enabled = idx < order.size - 1,
                                         ) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Вниз") }
