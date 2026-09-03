@@ -213,51 +213,6 @@ fun TournamentScreen(
 
             Divider()
 
-            // Итого по встрече — вынесено ниже счёта.
-            val showWin = t.moneyPerBallKop != null || t.stakeMode == "per_match"
-            if (showWin) {
-                val tPayout = viewModel.tournamentPayout
-                if (tPayout != null) {
-                    val netByPid = mutableMapOf<Long, Long>()
-                    tPayout.payouts.forEach { entry ->
-                        netByPid[entry.toParticipantId] =
-                            (netByPid[entry.toParticipantId] ?: 0L) + entry.amountKop
-                        netByPid[entry.fromParticipantId] =
-                            (netByPid[entry.fromParticipantId] ?: 0L) - entry.amountKop
-                    }
-                    Column(
-                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text("Итого по встрече", style = MaterialTheme.typography.titleSmall)
-                        t.participants.forEach { p ->
-                            val net = netByPid[p.id] ?: 0L
-                            val color = when {
-                                net > 0 -> MaterialTheme.colorScheme.primary
-                                net < 0 -> MaterialTheme.colorScheme.error
-                                else -> MaterialTheme.colorScheme.onSurface
-                            }
-                            val label = when {
-                                net > 0 -> "+${net / 100} ₽"
-                                net < 0 -> "${net / 100} ₽"
-                                else -> "0 ₽"
-                            }
-                            Row(
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    p.effectiveName(ui.myUserId, ui.myLocalName),
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Text(label, fontWeight = FontWeight.Bold, color = color)
-                            }
-                        }
-                    }
-                    Divider()
-                }
-            }
-
             // История партий.
             val finishedGames = ui.games.filter { it.status == "finished" }
             if (finishedGames.isNotEmpty()) {
@@ -510,6 +465,51 @@ fun TournamentScreen(
                         onDismiss = { sheetPid = null },
                         onShot = viewModel::addShot,
                     )
+                }
+            }
+
+            // Итого по встрече — после панели счёта.
+            val showWin = t.moneyPerBallKop != null || t.stakeMode == "per_match"
+            if (showWin) {
+                val tPayout = viewModel.tournamentPayout
+                if (tPayout != null) {
+                    val netByPid = mutableMapOf<Long, Long>()
+                    tPayout.payouts.forEach { entry ->
+                        netByPid[entry.toParticipantId] =
+                            (netByPid[entry.toParticipantId] ?: 0L) + entry.amountKop
+                        netByPid[entry.fromParticipantId] =
+                            (netByPid[entry.fromParticipantId] ?: 0L) - entry.amountKop
+                    }
+                    Divider()
+                    Column(
+                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text("Итого по встрече", style = MaterialTheme.typography.titleSmall)
+                        t.participants.forEach { p ->
+                            val net = netByPid[p.id] ?: 0L
+                            val color = when {
+                                net > 0 -> MaterialTheme.colorScheme.primary
+                                net < 0 -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.onSurface
+                            }
+                            val label = when {
+                                net > 0 -> "+${net / 100} ₽"
+                                net < 0 -> "${net / 100} ₽"
+                                else -> "0 ₽"
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    p.effectiveName(ui.myUserId, ui.myLocalName),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(label, fontWeight = FontWeight.Bold, color = color)
+                            }
+                        }
+                    }
                 }
             }
         }
