@@ -16,13 +16,11 @@ import com.example.billiardtracker.data.remote.dto.ParticipantDto
 enum class TileLayout { SplitVertical, VerticalList }
 
 /**
- * Портрет-режим. Плитка всегда во всю ширину экрана (v1.24.0):
+ * Плитка всегда во всю ширину экрана:
  *  - 2–4 игрока → split (SplitVertical): плитки делят высоту поровну.
  *  - 5+ / 1 / 0 → VerticalList: скроллящийся список плиток.
- *
- * До v1.24.0 для 3–4 игроков использовалась Grid2x2 (2 столбца по 50% ширины),
- * но узкие плитки не помещали новый ряд кнопок "+/Штраф/Свой/Чужой" — юзер
- * попросил всегда 100% ширины.
+ * Высота родительского Box вычисляется в TournamentScreen адаптивно под
+ * реальную высоту экрана (поддерживает авторотацию).
  */
 fun layoutFor(participantCount: Int): TileLayout = when (participantCount) {
     2, 3, 4 -> TileLayout.SplitVertical

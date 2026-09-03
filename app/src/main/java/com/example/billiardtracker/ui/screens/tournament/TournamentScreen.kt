@@ -358,11 +358,13 @@ fun TournamentScreen(
                     }
                 } else {
                     // Стандартный лейаут для всех дисциплин кроме Колхоза.
+                    // Высота адаптируется под реальную высоту экрана (портрет/пейзаж).
+                    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
                     val panelHeight = when (t.participants.size) {
-                        0, 1, 2 -> 420.dp
-                        3 -> 560.dp
-                        4 -> 720.dp
-                        else -> 720.dp
+                        0, 1, 2 -> (screenH * 0.55f).coerceAtLeast(380.dp)
+                        3 -> (screenH * 0.75f).coerceAtLeast(575.dp)
+                        4 -> (screenH * 0.95f).coerceAtLeast(770.dp)
+                        else -> (screenH * 0.95f).coerceAtLeast(770.dp)
                     }
                     Box(
                         Modifier
