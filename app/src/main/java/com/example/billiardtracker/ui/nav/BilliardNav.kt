@@ -1,6 +1,5 @@
 package com.example.billiardtracker.ui.nav
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,11 +30,14 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.example.billiardtracker.ui.components.LocalOnPendingSync
+import com.example.billiardtracker.ui.components.LocalPendingSync
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -221,6 +223,10 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
             androidx.compose.foundation.layout.Box(
                 Modifier.weight(1f).padding(padding).fillMaxSize()
             ) {
+            CompositionLocalProvider(
+                LocalPendingSync provides pendingSync,
+                LocalOnPendingSync provides { showPendingDialog = true },
+            ) {
             NavHost(
                 navController = nav,
                 startDestination = Route.Game.path,
@@ -375,25 +381,7 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                 )
             }
             }
-            // Overlay: pending offline-ops counter. Виден только когда > 0.
-            if (pendingSync > 0) {
-                androidx.compose.material3.Surface(
-                    modifier = Modifier
-                        .align(androidx.compose.ui.Alignment.TopEnd)
-                        .padding(8.dp)
-                        .clickable { showPendingDialog = true },
-                    shape = androidx.compose.material3.MaterialTheme.shapes.small,
-                    color = androidx.compose.material3.MaterialTheme.colorScheme.tertiaryContainer,
-                    tonalElevation = 2.dp,
-                ) {
-                    androidx.compose.material3.Text(
-                        "⏳ $pendingSync",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-                        color = androidx.compose.material3.MaterialTheme.colorScheme.onTertiaryContainer,
-                    )
-                }
-            }
+            }  // CompositionLocalProvider
             if (showPendingDialog) {
                 PendingOpsDialog(
                     ops = pendingOps,
