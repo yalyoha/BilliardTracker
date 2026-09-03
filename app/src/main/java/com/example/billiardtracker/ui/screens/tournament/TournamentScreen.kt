@@ -196,19 +196,39 @@ fun TournamentScreen(
                     }
                 }
 
-                // Текущий выигрыш — показываем если задана ставка или режим «за встречу».
-                val showWin = t.moneyPerBallKop != null || t.stakeMode == "per_match"
-                if (showWin) {
-                    val tPayout = viewModel.tournamentPayout
-                    if (tPayout != null) {
-                        val netByPid = mutableMapOf<Long, Long>()
-                        tPayout.payouts.forEach { entry ->
-                            netByPid[entry.toParticipantId] =
-                                (netByPid[entry.toParticipantId] ?: 0L) + entry.amountKop
-                            netByPid[entry.fromParticipantId] =
-                                (netByPid[entry.fromParticipantId] ?: 0L) - entry.amountKop
-                        }
-                        androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                // Осталось шаров на столе (только Колхоз).
+                if (t.gameType == "kolkhoz" && ui.currentGame != null) {
+                    val pottedCount = ui.currentGameShots.count { it.pointsDelta > 0 }
+                    val remaining = (15 - pottedCount).coerceAtLeast(0)
+                    androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Осталось шаров на столе")
+                        Text("$remaining", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Divider()
+
+            // Итого по встрече — вынесено ниже счёта.
+            val showWin = t.moneyPerBallKop != null || t.stakeMode == "per_match"
+            if (showWin) {
+                val tPayout = viewModel.tournamentPayout
+                if (tPayout != null) {
+                    val netByPid = mutableMapOf<Long, Long>()
+                    tPayout.payouts.forEach { entry ->
+                        netByPid[entry.toParticipantId] =
+                            (netByPid[entry.toParticipantId] ?: 0L) + entry.amountKop
+                        netByPid[entry.fromParticipantId] =
+                            (netByPid[entry.fromParticipantId] ?: 0L) - entry.amountKop
+                    }
+                    Column(
+                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
                         Text("Итого по встрече", style = MaterialTheme.typography.titleSmall)
                         t.participants.forEach { p ->
                             val net = netByPid[p.id] ?: 0L
@@ -234,10 +254,9 @@ fun TournamentScreen(
                             }
                         }
                     }
+                    Divider()
                 }
             }
-
-            Divider()
 
             // История партий.
             val finishedGames = ui.games.filter { it.status == "finished" }
