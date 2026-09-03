@@ -3,6 +3,7 @@ package com.example.billiardtracker.ui.nav
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -24,6 +25,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -147,44 +151,49 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
         Route.AddClub.path,
     )
 
+    val isLandscape = LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
+
+    val isTabSelected: (NavTab) -> Boolean = { tab ->
+        when {
+            currentRoute == tab.route -> true
+            tab.route == Route.Game.path && currentRoute in gameFlowRoutes -> true
+            tab.route == Route.Settings.path && (
+                currentRoute == Route.ClubsAdmin.path ||
+                currentRoute == Route.Rules.path ||
+                currentRoute == Route.RuleDetail.path
+            ) -> true
+            else -> backStack?.destination?.hierarchy?.any { it.route == tab.route } == true
+        }
+    }
+    val onTabClick: (NavTab) -> Unit = { tab ->
+        if (!isTabSelected(tab)) {
+            nav.navigate(tab.route) {
+                popUpTo(Route.Game.path) { saveState = true; inclusive = false }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    }
+
     Scaffold(
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                TABS.forEach { tab ->
-                    val selected = when {
-                        currentRoute == tab.route -> true
-                        tab.route == Route.Game.path && currentRoute in gameFlowRoutes -> true
-                        tab.route == Route.Settings.path && (
-                            currentRoute == Route.ClubsAdmin.path ||
-                            currentRoute == Route.Rules.path ||
-                            currentRoute == Route.RuleDetail.path
-                        ) -> true
-                        else -> backStack?.destination?.hierarchy?.any { it.route == tab.route } == true
+            if (!isLandscape) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                    TABS.forEach { tab ->
+                        NavigationBarItem(
+                            selected = isTabSelected(tab),
+                            onClick = { onTabClick(tab) },
+                            icon = { Icon(tab.icon, contentDescription = tab.label) },
+                            alwaysShowLabel = false,
+                            colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                                indicatorColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.primary,
+                                unselectedTextColor = MaterialTheme.colorScheme.primary,
+                            ),
+                        )
                     }
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = {
-                            if (!selected) {
-                                nav.navigate(tab.route) {
-                                    popUpTo(Route.Game.path) {
-                                        saveState = true
-                                        inclusive = false
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        },
-                        icon = { Icon(tab.icon, contentDescription = tab.label) },
-                        alwaysShowLabel = false,
-                        colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.onPrimary,
-                            selectedTextColor = MaterialTheme.colorScheme.onPrimary,
-                            indicatorColor = MaterialTheme.colorScheme.primary,
-                            unselectedIconColor = MaterialTheme.colorScheme.primary,
-                            unselectedTextColor = MaterialTheme.colorScheme.primary,
-                        ),
-                    )
                 }
             }
         },
@@ -192,7 +201,26 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
         val pendingSync by container.pendingSyncCount.collectAsStateWithLifecycle(0)
         val pendingOps by container.pendingSyncOps.collectAsStateWithLifecycle(emptyList())
         var showPendingDialog by remember { mutableStateOf(false) }
-        androidx.compose.foundation.layout.Box(Modifier.padding(padding).fillMaxSize()) {
+        Row(Modifier.fillMaxSize()) {
+            if (isLandscape) {
+                NavigationRail(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                    TABS.forEach { tab ->
+                        NavigationRailItem(
+                            selected = isTabSelected(tab),
+                            onClick = { onTabClick(tab) },
+                            icon = { Icon(tab.icon, contentDescription = tab.label) },
+                            colors = androidx.compose.material3.NavigationRailItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                indicatorColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.primary,
+                            ),
+                        )
+                    }
+                }
+            }
+            androidx.compose.foundation.layout.Box(
+                Modifier.weight(1f).padding(padding).fillMaxSize()
+            ) {
             NavHost(
                 navController = nav,
                 startDestination = Route.Game.path,
@@ -373,7 +401,8 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                     onRetry = { container.syncManager.kickDrain() },
                 )
             }
-        }
+        }  // Box
+        }  // Row
     }
 }
 
