@@ -396,7 +396,10 @@ class SyncManager(
                     .forEach { outboxDao.update(it.copy(localMemberId = serverMember.id)) }
             }
             "create_tournament" -> {
-                // Server response: Tournament + participants (creator + client-sent).
+                // Server response: Tournament + participants (только client-sent).
+                // С backend v1.31.1 сервер больше не prepend-ит creator — если
+                // владелец играет, он присутствует в body.participants (кнопка
+                // «Добавить себя» на UI).
                 val localTid = op.localTournamentId ?: return
                 if (localTid >= 0) return
                 val serverT = runCatching {
@@ -436,29 +439,13 @@ class SyncManager(
                         serverId = serverT.id,
                     )
                 )
-                // Participants remap: local list (без creator) matches
-                // server list[1..N] (первый — creator, добавленный сервером).
+                // Participants remap 1-к-1: local[i] ↔ server[i]. Порядок
+                // сохраняется — сервер вставляет participants в том же порядке,
+                // в котором пришли в body.participants.
                 val localParts = participantDao.listByTournament(localTid)
                 val serverParts = serverT.participants
-                // Insert creator (первый в serverParts, у нас его локально не было).
-                if (serverParts.isNotEmpty()) {
-                    val creator = serverParts.first()
-                    participantDao.upsert(
-                        ParticipantEntity(
-                            id = creator.id,
-                            tournamentId = serverT.id,
-                            userId = creator.userId,
-                            displayName = creator.displayName,
-                            handicapPoints = creator.handicapPoints,
-                            perBallOverrideKop = creator.perBallOverrideKop,
-                            lastSyncedAt = now,
-                        )
-                    )
-                }
-                // Match каждый локальный participant к серверу по индексу
-                // (сервер сохраняет порядок из body.participants + creator prepended).
                 localParts.forEachIndexed { idx, local ->
-                    val serverIdx = idx + 1 // skip creator
+                    val serverIdx = idx
                     if (serverIdx >= serverParts.size) return@forEachIndexed
                     val serverP = serverParts[serverIdx]
                     val oldPid = local.id
