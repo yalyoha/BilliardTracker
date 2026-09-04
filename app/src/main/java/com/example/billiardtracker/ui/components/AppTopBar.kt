@@ -4,9 +4,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
@@ -49,12 +53,17 @@ fun BilliardTopBar(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .windowInsetsPadding(
+                            WindowInsets.safeDrawing.only(
+                                WindowInsetsSides.Top + WindowInsetsSides.Horizontal
+                            )
+                        )
                         .height(48.dp)
-                        .padding(horizontal = 4.dp),
+                        .padding(end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     navigationIcon()
-                    Box(Modifier.weight(1f).padding(start = 4.dp)) {
+                    Box(Modifier.weight(1f).padding(start = 16.dp)) {
                         CompositionLocalProvider(
                             LocalContentColor provides MaterialTheme.colorScheme.onBackground,
                             LocalTextStyle provides MaterialTheme.typography.titleMedium,
@@ -97,7 +106,8 @@ fun BilliardTopBar(
                 navigationIconContentColor = MaterialTheme.colorScheme.primary,
                 actionIconContentColor = MaterialTheme.colorScheme.primary,
             ),
-            windowInsets = WindowInsets(0, 0, 0, 0),
+            // Дефолтные windowInsets: TopAppBar сам заходит за статус-бар своим
+            // containerColor и сдвигает заголовок вниз ровно на его высоту.
         )
     }
 }

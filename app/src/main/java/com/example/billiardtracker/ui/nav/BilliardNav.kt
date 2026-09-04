@@ -1,21 +1,34 @@
 package com.example.billiardtracker.ui.nav
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.billiardtracker.data.local.entity.OutboxOpEntity
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QueryStats
@@ -24,8 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.Surface
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -178,6 +190,10 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
     }
 
     Scaffold(
+        // Отдаём системные инсеты потомкам — TopAppBar сам заходит за статус-бар,
+        // NavigationBar/наш кастомный rail сами обрабатывают safeDrawing.
+        // Это позволяет универсально работать на всех 4 rotation-ах.
+        contentWindowInsets = WindowInsets(0),
         bottomBar = {
             if (!isLandscape) {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
@@ -203,24 +219,14 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
         val pendingSync by container.pendingSyncCount.collectAsStateWithLifecycle(0)
         val pendingOps by container.pendingSyncOps.collectAsStateWithLifecycle(emptyList())
         var showPendingDialog by remember { mutableStateOf(false) }
+        // Outer Scaffold сейчас с contentWindowInsets = WindowInsets(0), поэтому
+        // `padding` содержит только высоту bottomBar (в портрете это NavigationBar
+        // со своими системными инсетами; в landscape bottomBar не рисуется).
+        // Никаких дополнительных горизонтальных/верхних инсетов сюда не приходит —
+        // они разбираются вниз по дереву (TopAppBar в портрете, rail и кастомный
+        // top-bar в landscape).
         Row(Modifier.fillMaxSize()) {
-            if (isLandscape) {
-                NavigationRail(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                    TABS.forEach { tab ->
-                        NavigationRailItem(
-                            selected = isTabSelected(tab),
-                            onClick = { onTabClick(tab) },
-                            icon = { Icon(tab.icon, contentDescription = tab.label) },
-                            colors = androidx.compose.material3.NavigationRailItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
-                                indicatorColor = MaterialTheme.colorScheme.primary,
-                                unselectedIconColor = MaterialTheme.colorScheme.primary,
-                            ),
-                        )
-                    }
-                }
-            }
-            androidx.compose.foundation.layout.Box(
+            Box(
                 Modifier.weight(1f).padding(padding).fillMaxSize()
             ) {
             CompositionLocalProvider(
@@ -390,6 +396,54 @@ fun BilliardNavHost(container: AppContainer, nav: NavHostController = rememberNa
                 )
             }
         }  // Box
+            if (isLandscape) {
+                // Компактный вертикальный «rail» — только иконки. Surface фонит
+                // весь столбец edge-to-edge (в цвет заголовка), а внутренний
+                // Column применяет safeDrawing по vertical + end, чтобы иконки
+                // не наезжали на статус-бар/навбар и на display cutout вне
+                // зависимости от того, в какую сторону повёрнут экран.
+                Surface(
+                    modifier = Modifier.fillMaxHeight(),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .windowInsetsPadding(
+                                WindowInsets.safeDrawing.only(
+                                    WindowInsetsSides.Vertical + WindowInsetsSides.End
+                                )
+                            )
+                            .padding(vertical = 8.dp, horizontal = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(
+                            8.dp, Alignment.CenterVertically
+                        ),
+                    ) {
+                        TABS.forEach { tab ->
+                            val selected = isTabSelected(tab)
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (selected) MaterialTheme.colorScheme.primary
+                                        else Color.Transparent
+                                    )
+                                    .clickable { onTabClick(tab) },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    tab.icon,
+                                    contentDescription = tab.label,
+                                    tint = if (selected) MaterialTheme.colorScheme.onPrimary
+                                    else MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }  // Row
     }
 }
