@@ -172,9 +172,17 @@ fun TournamentScreen(
                 }
             }
 
-            // Scoreboard текущей партии + счёт побед по турниру.
-            val scoreboardScores =
+            // Scoreboard. Для колхоза — накопительный итог по всем партиям встречи
+            // (очки не обнуляются при старте новой партии). Для всех остальных дисциплин —
+            // только текущая партия.
+            val isKolkhozMode = t.gameType == "kolkhoz"
+            val scoreboardScores = if (isKolkhozMode) {
+                val acc = mutableMapOf<Long, Int>()
+                ui.games.forEach { g -> g.scores.forEach { s -> acc[s.participantId] = (acc[s.participantId] ?: 0) + s.points } }
+                acc
+            } else {
                 ui.currentGame?.scores?.associate { it.participantId to it.points } ?: emptyMap()
+            }
             if (isLandscape) {
                 // Пейзаж: компактная горизонтальная строка
                 Row(
@@ -183,7 +191,11 @@ fun TournamentScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        if (target != null) "До $target:" else "Счёт:",
+                        when {
+                            target != null -> "До $target:"
+                            isKolkhozMode -> "Итого:"
+                            else -> "Счёт:"
+                        },
                         style = MaterialTheme.typography.titleSmall,
                     )
                     t.participants.forEach { p ->
@@ -210,7 +222,11 @@ fun TournamentScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
-                        if (target != null) "Играем до $target побед" else "Счёт партии",
+                        when {
+                            target != null -> "Играем до $target побед"
+                            isKolkhozMode -> "Итого за встречу"
+                            else -> "Счёт партии"
+                        },
                         style = MaterialTheme.typography.titleSmall,
                     )
                     t.participants.forEach { p ->
@@ -277,7 +293,7 @@ fun TournamentScreen(
                 com.example.billiardtracker.domain.rules.GameType.entries
                     .firstOrNull { it.ruleFileSlug == t.gameType } ?: com.example.billiardtracker.domain.rules.GameType.FREE_PYRAMID
             )
-            val isKolkhoz = t.gameType == "kolkhoz"
+            val isKolkhoz = isKolkhozMode
             LaunchedEffect(t.participants) {
                 if (isKolkhoz) viewModel.initKolkhozOrder(t.participants.map { it.id })
             }
