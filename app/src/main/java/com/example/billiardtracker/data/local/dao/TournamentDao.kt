@@ -12,6 +12,9 @@ interface TournamentDao {
     @Query("SELECT * FROM tournaments ORDER BY startedAt DESC")
     fun observeAll(): Flow<List<TournamentEntity>>
 
+    @Query("SELECT * FROM tournaments")
+    suspend fun listAll(): List<TournamentEntity>
+
     @Query("SELECT * FROM tournaments WHERE id = :id")
     suspend fun getById(id: Long): TournamentEntity?
 

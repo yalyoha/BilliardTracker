@@ -90,12 +90,18 @@ class AppContainer(context: Context) {
         }
     }
 
+    private val migration4to5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE tournaments ADD COLUMN stakeMode TEXT")
+        }
+    }
+
     val db: AppDatabase = Room.databaseBuilder(
         context.applicationContext,
         AppDatabase::class.java,
         "billiardtracker.db",
     )
-        .addMigrations(migration1to2, migration2to3, migration3to4)
+        .addMigrations(migration1to2, migration2to3, migration3to4, migration4to5)
         .fallbackToDestructiveMigration(true)
         .build()
 

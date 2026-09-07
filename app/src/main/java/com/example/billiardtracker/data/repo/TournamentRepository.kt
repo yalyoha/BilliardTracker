@@ -32,20 +32,25 @@ class TournamentRepository(
             Result.failure(IllegalStateException("HTTP ${res.code()}"))
         } else {
             val now = System.currentTimeMillis()
+            // Сохраняем детали (moneyPerBallKop, stakeMode), которых нет в списочном DTO,
+            // чтобы не затирать кэшированные значения при обновлении списка.
+            val existingById = tournamentDao.listAll().associateBy { it.id }
             val entities = res.body()!!.tournaments.map {
+                val existing = existingById[it.id]
                 TournamentEntity(
                     id = it.id,
                     title = it.title,
-                    clubId = null,
+                    clubId = existing?.clubId,
                     gameType = it.gameType,
-                    moneyPerBallKop = null,
-                    createdByUserId = 0,
-                    refereeUserId = null,
+                    moneyPerBallKop = existing?.moneyPerBallKop,
+                    createdByUserId = existing?.createdByUserId ?: 0,
+                    refereeUserId = existing?.refereeUserId,
                     status = it.status,
                     startedAt = it.startedAt,
-                    finishedAt = null,
+                    finishedAt = existing?.finishedAt,
                     lastSyncedAt = now,
                     serverId = it.id,
+                    stakeMode = existing?.stakeMode,
                 )
             }
             // Запоминаем ID встреч, скрытых пользователем, до удаления таблицы.
@@ -108,6 +113,7 @@ class TournamentRepository(
                 finishedAt = dto.finishedAt,
                 lastSyncedAt = now,
                 serverId = dto.id,
+                stakeMode = dto.stakeMode,
             ),
         )
         participantDao.upsertAll(
@@ -167,6 +173,7 @@ class TournamentRepository(
                 refereeUserId = existing?.refereeUserId,
                 clubId = existing?.clubId,
                 moneyPerBallKop = existing?.moneyPerBallKop,
+                stakeMode = existing?.stakeMode,
             )
         )
     }
@@ -240,6 +247,7 @@ class TournamentRepository(
             finishedAt = null,
             lastSyncedAt = 0L,
             serverId = null,
+            stakeMode = body.stakeMode,
         )
         tournamentDao.upsert(local)
         val localParticipants = body.participants.map { p ->
@@ -280,6 +288,7 @@ class TournamentRepository(
         startedAt = startedAt,
         finishedAt = finishedAt,
         participants = parts,
+        stakeMode = stakeMode,
     )
 
     private fun ParticipantEntity.toDto(): ParticipantDto = ParticipantDto(
