@@ -401,32 +401,11 @@ fun TournamentScreen(
                                             modifier = Modifier.weight(1f),
                                         )
                                         val currScore = scoresByPid[p.id] ?: 0
-                                        val totalScore = scoreboardScores[p.id] ?: 0
-                                        val moneyKop = t.moneyPerBallKop?.let { totalScore.toLong() * it }
-                                        val cardColor = when {
-                                            (moneyKop ?: 0L) > 0 -> MaterialTheme.colorScheme.primary
-                                            (moneyKop ?: 0L) < 0 -> MaterialTheme.colorScheme.error
-                                            else -> MaterialTheme.colorScheme.onSurface
-                                        }
-                                        val moneyStr = moneyKop?.let {
-                                            val sign = if (it >= 0) "+" else ""
-                                            "\n$sign${formatRubShort(it)}"
-                                        } ?: ""
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text(
-                                                "$totalScore$moneyStr",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = cardColor,
-                                            )
-                                            if (finishedGames.isNotEmpty()) {
-                                                Text(
-                                                    "эта: ${if (currScore >= 0) "+$currScore" else "$currScore"}",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
-                                            }
-                                        }
+                                        Text(
+                                            if (currScore >= 0) "+$currScore" else "$currScore",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                        )
                                     }
                                     if (!ui.isReferee) {
                                         Text(
