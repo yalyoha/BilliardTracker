@@ -17,8 +17,8 @@ android {
         applicationId = "com.example.billiardtracker"
         minSdk = 28
         targetSdk = 36
-        versionCode = 145
-        versionName = "1.31.3"
+        versionCode = 146
+        versionName = "1.31.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

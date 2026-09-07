@@ -597,13 +597,7 @@ private fun FinishedGameRow(
     perGameWinKop: Long? = null,
 ) {
     val winner = participants.firstOrNull { it.id == game.winnerParticipantId }
-    val scoresText = game.scores
-        .sortedByDescending { it.points }
-        .joinToString(" · ") { s ->
-            val name = participants.firstOrNull { it.id == s.participantId }
-                ?.effectiveName(currentUserId, myLocalName) ?: "?"
-            "$name ${s.points}"
-        }
+    val sortedScores = game.scores.sortedByDescending { it.points }
     Column {
         Row(
             Modifier.fillMaxWidth(),
@@ -632,12 +626,32 @@ private fun FinishedGameRow(
                 )
             }
         }
-        if (scoresText.isNotBlank()) {
-            Text(
-                scoresText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        if (sortedScores.isNotEmpty()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 2.dp),
+            ) {
+                sortedScores.forEachIndexed { idx, s ->
+                    val name = participants.firstOrNull { it.id == s.participantId }
+                        ?.effectiveName(currentUserId, myLocalName) ?: "?"
+                    val isWinner = s.participantId == game.winnerParticipantId
+                    val color = when {
+                        isWinner -> MaterialTheme.colorScheme.primary
+                        game.winnerParticipantId != null -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    if (idx > 0) {
+                        Text("·", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text(
+                        "$name ${s.points}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = color,
+                        fontWeight = if (isWinner) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                }
+            }
         }
     }
 }
