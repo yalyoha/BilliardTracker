@@ -281,6 +281,7 @@ fun TournamentScreen(
                             currentUserId = ui.myUserId,
                             myLocalName = ui.myLocalName,
                             perGameWinKop = perGameWinKop,
+                            isKolkhoz = isKolkhozMode,
                         )
                     }
                 }
@@ -611,8 +612,9 @@ private fun FinishedGameRow(
     currentUserId: Long,
     myLocalName: String?,
     perGameWinKop: Long? = null,
+    isKolkhoz: Boolean = false,
 ) {
-    val winner = participants.firstOrNull { it.id == game.winnerParticipantId }
+    val winner = if (isKolkhoz) null else participants.firstOrNull { it.id == game.winnerParticipantId }
     val sortedScores = game.scores.sortedByDescending { it.points }
     Column {
         Row(
@@ -650,10 +652,10 @@ private fun FinishedGameRow(
                 sortedScores.forEachIndexed { idx, s ->
                     val name = participants.firstOrNull { it.id == s.participantId }
                         ?.effectiveName(currentUserId, myLocalName) ?: "?"
-                    val isWinner = s.participantId == game.winnerParticipantId
+                    val isWinner = !isKolkhoz && s.participantId == game.winnerParticipantId
                     val color = when {
                         isWinner -> MaterialTheme.colorScheme.primary
-                        game.winnerParticipantId != null -> MaterialTheme.colorScheme.error
+                        !isKolkhoz && game.winnerParticipantId != null -> MaterialTheme.colorScheme.error
                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                     }
                     if (idx > 0) {
