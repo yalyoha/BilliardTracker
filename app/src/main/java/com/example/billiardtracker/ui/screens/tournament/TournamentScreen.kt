@@ -57,6 +57,8 @@ internal fun ParticipantDto.effectiveName(currentUserId: Long, myLocalName: Stri
     }
 }
 
+private fun formatRubShort(kop: Long): String = "%.0f ₽".format(kop / 100.0)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TournamentScreen(
@@ -254,12 +256,15 @@ fun TournamentScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text("Партии", style = MaterialTheme.typography.titleSmall)
+                    val perGameWinKop: Long? = if (t.stakeMode == "per_match" && t.moneyPerBallKop != null)
+                        t.moneyPerBallKop * (t.participants.size - 1).toLong() else null
                     finishedGames.forEach { g ->
                         FinishedGameRow(
                             game = g,
                             participants = t.participants,
                             currentUserId = ui.myUserId,
                             myLocalName = ui.myLocalName,
+                            perGameWinKop = perGameWinKop,
                         )
                     }
                 }
@@ -532,8 +537,8 @@ fun TournamentScreen(
                                     else -> MaterialTheme.colorScheme.onSurface
                                 }
                                 val label = when {
-                                    net > 0 -> "+${net / 100} ₽"
-                                    net < 0 -> "${net / 100} ₽"
+                                    net > 0 -> "+${formatRubShort(net)}"
+                                    net < 0 -> formatRubShort(net)
                                     else -> "0 ₽"
                                 }
                                 Text(
@@ -559,8 +564,8 @@ fun TournamentScreen(
                                     else -> MaterialTheme.colorScheme.onSurface
                                 }
                                 val label = when {
-                                    net > 0 -> "+${net / 100} ₽"
-                                    net < 0 -> "${net / 100} ₽"
+                                    net > 0 -> "+${formatRubShort(net)}"
+                                    net < 0 -> formatRubShort(net)
                                     else -> "0 ₽"
                                 }
                                 Row(
@@ -589,6 +594,7 @@ private fun FinishedGameRow(
     participants: List<ParticipantDto>,
     currentUserId: Long,
     myLocalName: String?,
+    perGameWinKop: Long? = null,
 ) {
     val winner = participants.firstOrNull { it.id == game.winnerParticipantId }
     val scoresText = game.scores
@@ -602,6 +608,7 @@ private fun FinishedGameRow(
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 "Партия ${game.orderIndex}",
@@ -609,9 +616,19 @@ private fun FinishedGameRow(
                 fontWeight = FontWeight.Medium,
             )
             winner?.let {
+                val winLabel = buildString {
+                    append("🏆 ")
+                    append(it.effectiveName(currentUserId, myLocalName))
+                    if (perGameWinKop != null && perGameWinKop > 0) {
+                        append("  +")
+                        append(formatRubShort(perGameWinKop))
+                    }
+                }
                 Text(
-                    "🏆 ${it.effectiveName(currentUserId, myLocalName)}",
+                    winLabel,
                     style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
                 )
             }
         }
