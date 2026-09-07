@@ -204,10 +204,24 @@ fun TournamentScreen(
                         val wins = winsByPid[p.id] ?: 0
                         val score = scoreboardScores[p.id] ?: 0
                         val winsStr = target?.let { "($wins/$it)" } ?: "($wins)"
+                        val lMoneyStr = if (isKolkhozMode && t.moneyPerBallKop != null) {
+                            val kop = score.toLong() * t.moneyPerBallKop
+                            val sign = if (kop >= 0) "+" else ""
+                            " ($sign${formatRubShort(kop)})"
+                        } else ""
+                        val lColor = if (isKolkhozMode && t.moneyPerBallKop != null) {
+                            val kop = score.toLong() * t.moneyPerBallKop
+                            when {
+                                kop > 0 -> MaterialTheme.colorScheme.primary
+                                kop < 0 -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.onSurface
+                            }
+                        } else MaterialTheme.colorScheme.onSurface
                         Text(
-                            "$marker$name $winsStr: $score",
+                            "$marker$name $winsStr: $score$lMoneyStr",
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f),
+                            color = lColor,
                         )
                     }
                     if (t.gameType == "kolkhoz" && ui.currentGame != null) {
@@ -243,7 +257,19 @@ fun TournamentScreen(
                                 "$name$marker$winsSuffix",
                                 modifier = Modifier.weight(1f),
                             )
-                            Text("${scoreboardScores[p.id] ?: 0}", fontWeight = FontWeight.Bold)
+                            val kScore = scoreboardScores[p.id] ?: 0
+                            if (isKolkhozMode && t.moneyPerBallKop != null) {
+                                val kop = kScore.toLong() * t.moneyPerBallKop
+                                val sign = if (kop >= 0) "+" else ""
+                                val kColor = when {
+                                    kop > 0 -> MaterialTheme.colorScheme.primary
+                                    kop < 0 -> MaterialTheme.colorScheme.error
+                                    else -> MaterialTheme.colorScheme.onSurface
+                                }
+                                Text("$kScore ($sign${formatRubShort(kop)})", fontWeight = FontWeight.Bold, color = kColor)
+                            } else {
+                                Text("$kScore", fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                     // Осталось шаров на столе (только Колхоз).
@@ -374,11 +400,33 @@ fun TournamentScreen(
                                             fontWeight = FontWeight.Medium,
                                             modifier = Modifier.weight(1f),
                                         )
-                                        Text(
-                                            "${scoresByPid[p.id] ?: 0}",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                        )
+                                        val currScore = scoresByPid[p.id] ?: 0
+                                        val totalScore = scoreboardScores[p.id] ?: 0
+                                        val moneyKop = t.moneyPerBallKop?.let { totalScore.toLong() * it }
+                                        val cardColor = when {
+                                            (moneyKop ?: 0L) > 0 -> MaterialTheme.colorScheme.primary
+                                            (moneyKop ?: 0L) < 0 -> MaterialTheme.colorScheme.error
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        }
+                                        val moneyStr = moneyKop?.let {
+                                            val sign = if (it >= 0) "+" else ""
+                                            "\n$sign${formatRubShort(it)}"
+                                        } ?: ""
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Text(
+                                                "$totalScore$moneyStr",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = cardColor,
+                                            )
+                                            if (finishedGames.isNotEmpty()) {
+                                                Text(
+                                                    "эта: ${if (currScore >= 0) "+$currScore" else "$currScore"}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
                                     }
                                     if (!ui.isReferee) {
                                         Text(
@@ -526,7 +574,8 @@ fun TournamentScreen(
             }
 
             // Итого по встрече — после панели счёта.
-            val showWin = t.moneyPerBallKop != null || t.stakeMode == "per_match"
+            // Для колхоза не показываем: рубли уже видны в шапке «Итого за встречу».
+            val showWin = (t.moneyPerBallKop != null || t.stakeMode == "per_match") && !isKolkhozMode
             if (showWin) {
                 val tPayout = viewModel.tournamentPayout
                 if (tPayout != null) {
