@@ -176,12 +176,14 @@ fun TournamentScreen(
             // (очки не обнуляются при старте новой партии). Для всех остальных дисциплин —
             // только текущая партия.
             val isKolkhozMode = t.gameType == "kolkhoz"
+            val currentGameScores: Map<Long, Int> =
+                ui.currentGame?.scores?.associate { it.participantId to it.points } ?: emptyMap()
             val scoreboardScores = if (isKolkhozMode) {
                 val acc = mutableMapOf<Long, Int>()
                 ui.games.forEach { g -> g.scores.forEach { s -> acc[s.participantId] = (acc[s.participantId] ?: 0) + s.points } }
                 acc
             } else {
-                ui.currentGame?.scores?.associate { it.participantId to it.points } ?: emptyMap()
+                currentGameScores
             }
             if (isLandscape) {
                 // Пейзаж: компактная горизонтальная строка
@@ -235,6 +237,52 @@ fun TournamentScreen(
                     Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
+                    // Для колхоза — раздел "Итого за партию" (только текущая партия).
+                    if (isKolkhozMode && ui.currentGame != null) {
+                        Text("Итого за партию", style = MaterialTheme.typography.titleSmall)
+                        t.participants.forEach { p ->
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                val marker = if (t.refereeUserId != null && p.userId == t.refereeUserId) " 🎩" else ""
+                                val name = p.effectiveName(ui.myUserId, ui.myLocalName)
+                                Text("$name$marker", modifier = Modifier.weight(1f))
+                                val cgScore = currentGameScores[p.id] ?: 0
+                                if (t.moneyPerBallKop != null) {
+                                    val kop = cgScore.toLong() * t.moneyPerBallKop
+                                    val sign = if (kop >= 0) "+" else ""
+                                    val cgColor = when {
+                                        kop > 0 -> MaterialTheme.colorScheme.primary
+                                        kop < 0 -> MaterialTheme.colorScheme.error
+                                        else -> MaterialTheme.colorScheme.onSurface
+                                    }
+                                    Text(
+                                        "$cgScore ($sign${formatRubShort(kop)})",
+                                        fontWeight = FontWeight.Bold,
+                                        color = cgColor,
+                                    )
+                                } else {
+                                    Text("$cgScore", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        // Осталось шаров на столе.
+                        val pottedCount = ui.currentGameShots.count { it.pointsDelta > 0 }
+                        val remaining = (15 - pottedCount).coerceAtLeast(0)
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Осталось шаров", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("$remaining", style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                    }
+                    // Итого за встречу (накопительно) / Счёт партии для остальных дисциплин.
                     Text(
                         when {
                             target != null -> "Играем до $target побед"
@@ -270,19 +318,6 @@ fun TournamentScreen(
                             } else {
                                 Text("$kScore", fontWeight = FontWeight.Bold)
                             }
-                        }
-                    }
-                    // Осталось шаров на столе (только Колхоз).
-                    if (t.gameType == "kolkhoz" && ui.currentGame != null) {
-                        val pottedCount = ui.currentGameShots.count { it.pointsDelta > 0 }
-                        val remaining = (15 - pottedCount).coerceAtLeast(0)
-                        androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("Осталось шаров на столе")
-                            Text("$remaining", fontWeight = FontWeight.Bold)
                         }
                     }
                 }
