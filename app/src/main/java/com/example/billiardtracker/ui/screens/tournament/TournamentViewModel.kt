@@ -123,7 +123,15 @@ class TournamentViewModel(
                 .associateBy { it.orderIndex }
             val mergedGames = serverGames.map { sg ->
                 val lf = localFinished[sg.id] ?: localFinishedByOrderIndex[sg.orderIndex]
-                lf?.takeIf { sg.status != "finished" || sg.winnerParticipantId == null } ?: sg
+                when {
+                    // Сервер ещё не подтвердил finish — берём локальную версию.
+                    lf != null && (sg.status != "finished" || sg.winnerParticipantId == null) -> lf
+                    // Сервер подтвердил finish, но scores не возвращает в list-endpoint
+                    // (listGames отдаёт только метаданные). Берём серверный объект,
+                    // но подставляем локальные очки — они всегда актуальнее.
+                    lf != null && sg.scores.isEmpty() -> sg.copy(scores = lf.scores)
+                    else -> sg
+                }
             } + localUnsynced
             val currentLocal = _ui.value.currentGame
             val active = when {
