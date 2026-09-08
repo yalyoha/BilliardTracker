@@ -104,6 +104,11 @@ class TournamentViewModel(
 
     private suspend fun refresh() {
         tournamentRepo.fetchDetail(tournamentId).onSuccess { t ->
+            // Колхоз: инициализируем порядок игроков при первом refresh,
+            // чтобы кнопки ▲/▼ работали сразу — LaunchedEffect в UI асинхронный.
+            if (t.gameType == "kolkhoz" && _kolkhozOrder.value == null) {
+                _kolkhozOrder.value = t.participants.map { it.id }
+            }
             val serverGames = gameRepo.listGames(tournamentId).getOrElse { emptyList() }
             // Сохраняем локально созданные (id < 0) игры, которые ещё не
             // синкнулись. Dedup по orderIndex: если сервер вернул game с
