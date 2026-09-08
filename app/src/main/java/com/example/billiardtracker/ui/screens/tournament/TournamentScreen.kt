@@ -282,41 +282,28 @@ fun TournamentScreen(
                         }
                         androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 4.dp))
                     }
-                    // Итого за встречу (накопительно) / Счёт партии для остальных дисциплин.
-                    Text(
-                        when {
-                            target != null -> "Играем до $target побед"
-                            isKolkhozMode -> "Итого за встречу"
-                            else -> "Счёт партии"
-                        },
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    t.participants.forEach { p ->
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            val marker =
-                                if (t.refereeUserId != null && p.userId == t.refereeUserId) " 🎩" else ""
-                            val name = p.effectiveName(ui.myUserId, ui.myLocalName)
-                            val wins = winsByPid[p.id] ?: 0
-                            val winsSuffix = target?.let { " · $wins/$it побед" } ?: " · $wins побед"
-                            Text(
-                                "$name$marker$winsSuffix",
-                                modifier = Modifier.weight(1f),
-                            )
-                            val kScore = scoreboardScores[p.id] ?: 0
-                            if (isKolkhozMode && t.moneyPerBallKop != null) {
-                                val kop = kScore.toLong() * t.moneyPerBallKop
-                                val sign = if (kop >= 0) "+" else ""
-                                val kColor = when {
-                                    kop > 0 -> MaterialTheme.colorScheme.primary
-                                    kop < 0 -> MaterialTheme.colorScheme.error
-                                    else -> MaterialTheme.colorScheme.onSurface
-                                }
-                                Text("$kScore ($sign${formatRubShort(kop)})", fontWeight = FontWeight.Bold, color = kColor)
-                            } else {
-                                Text("$kScore", fontWeight = FontWeight.Bold)
+                    // Счёт партии / До X побед — только для не-колхозных дисциплин.
+                    // Для колхоза «Итого за встречу» показывается ниже табло счёта.
+                    if (!isKolkhozMode) {
+                        Text(
+                            if (target != null) "Играем до $target побед" else "Счёт партии",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        t.participants.forEach { p ->
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                val marker =
+                                    if (t.refereeUserId != null && p.userId == t.refereeUserId) " 🎩" else ""
+                                val name = p.effectiveName(ui.myUserId, ui.myLocalName)
+                                val wins = winsByPid[p.id] ?: 0
+                                val winsSuffix = target?.let { " · $wins/$it побед" } ?: " · $wins побед"
+                                Text(
+                                    "$name$marker$winsSuffix",
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text("${scoreboardScores[p.id] ?: 0}", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -587,8 +574,42 @@ fun TournamentScreen(
                 }
             }
 
+            // Итого за встречу для колхоза — ниже табло счёта.
+            if (isKolkhozMode) {
+                Divider()
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text("Итого за встречу", style = MaterialTheme.typography.titleSmall)
+                    t.participants.forEach { p ->
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            val marker = if (t.refereeUserId != null && p.userId == t.refereeUserId) " 🎩" else ""
+                            val name = p.effectiveName(ui.myUserId, ui.myLocalName)
+                            Text("$name$marker", modifier = Modifier.weight(1f))
+                            val kScore = scoreboardScores[p.id] ?: 0
+                            if (t.moneyPerBallKop != null) {
+                                val kop = kScore.toLong() * t.moneyPerBallKop
+                                val sign = if (kop >= 0) "+" else ""
+                                val kColor = when {
+                                    kop > 0 -> MaterialTheme.colorScheme.primary
+                                    kop < 0 -> MaterialTheme.colorScheme.error
+                                    else -> MaterialTheme.colorScheme.onSurface
+                                }
+                                Text("$kScore ($sign${formatRubShort(kop)})", fontWeight = FontWeight.Bold, color = kColor)
+                            } else {
+                                Text("$kScore", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
             // Итого по встрече — после панели счёта.
-            // Для колхоза не показываем: рубли уже видны в шапке «Итого за встречу».
+            // Для колхоза не показываем: рубли уже видны в блоке «Итого за встречу» ниже.
             val showWin = (t.moneyPerBallKop != null || t.stakeMode == "per_match") && !isKolkhozMode
             if (showWin) {
                 val tPayout = viewModel.tournamentPayout
