@@ -32,6 +32,10 @@ data class TournamentUiState(
     val myLocalName: String? = null,
     val lastShotIdPerGame: Map<Long, Long> = emptyMap(),
     val currentGameShots: List<ShotDto> = emptyList(),
+    // Колхоз: накопленные очки всех завершённых партий. Обновляется только
+    // в finishGame(), никогда не сбрасывается refresh() — scores не хранятся
+    // в Room и не возвращаются list-endpoint'ом.
+    val kolkhozFinishedScores: Map<Long, Int> = emptyMap(),
 ) {
     val isReferee: Boolean
         get() = tournament != null && tournament.refereeUserId == myUserId
@@ -283,9 +287,17 @@ class TournamentViewModel(
             winnerParticipantId = resolvedWinner,
             finishedAt = System.currentTimeMillis(),
         )
+        // Колхоз: накапливаем очки завершённой партии в отдельном поле —
+        // оно не зависит от sync и не сбрасывается refresh().
+        val newKolkhozFinished = if (_ui.value.tournament?.gameType == "kolkhoz") {
+            val acc = _ui.value.kolkhozFinishedScores.toMutableMap()
+            game.scores.forEach { s -> acc[s.participantId] = (acc[s.participantId] ?: 0) + s.points }
+            acc
+        } else _ui.value.kolkhozFinishedScores
         _ui.value = _ui.value.copy(
             games = _ui.value.games.map { if (it.id == game.id) finishedGame else it },
             currentGame = finishedGame,
+            kolkhozFinishedScores = newKolkhozFinished,
         )
         viewModelScope.launch {
             gameRepo.finishGame(tournamentId, game.id, resolvedWinner).onSuccess { refresh() }
