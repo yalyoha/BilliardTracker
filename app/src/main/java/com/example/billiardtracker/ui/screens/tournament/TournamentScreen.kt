@@ -559,6 +559,7 @@ fun TournamentScreen(
                         winnerScore = autoWinnerScore,
                         onUndo = viewModel::undoLastShot,
                         onFinish = { viewModel.finishGame() },
+                        isKolkhoz = isKolkhoz,
                     )
                 }
                 sheetPid?.let { pid ->

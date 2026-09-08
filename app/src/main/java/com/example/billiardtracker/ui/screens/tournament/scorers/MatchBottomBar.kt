@@ -34,9 +34,12 @@ fun MatchBottomBar(
     onUndo: () -> Unit,
     onFinish: () -> Unit,
     modifier: Modifier = Modifier,
+    isKolkhoz: Boolean = false,
 ) {
     var confirmOpen by remember { mutableStateOf(false) }
     val isLandscape = LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
+    // Для колхоза победителя нет — завершаем сразу без диалога.
+    val onFinishClick: () -> Unit = if (isKolkhoz) onFinish else { { confirmOpen = true } }
     if (isLandscape) {
         Row(
             modifier.fillMaxWidth().padding(8.dp),
@@ -52,7 +55,7 @@ fun MatchBottomBar(
             OutlinedButton(onClick = onUndo, modifier = Modifier.weight(0.8f)) {
                 Text("↶ Отменить")
             }
-            Button(onClick = { confirmOpen = true }, modifier = Modifier.weight(1f)) {
+            Button(onClick = onFinishClick, modifier = Modifier.weight(1f)) {
                 Text("Партия окончена")
             }
         }
@@ -73,7 +76,7 @@ fun MatchBottomBar(
                 OutlinedButton(onClick = onUndo, modifier = Modifier.weight(1f)) {
                     Text("↶ Отменить")
                 }
-                Button(onClick = { confirmOpen = true }, modifier = Modifier.weight(1f)) {
+                Button(onClick = onFinishClick, modifier = Modifier.weight(1f)) {
                     Text("Партия окончена")
                 }
             }
