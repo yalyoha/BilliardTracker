@@ -325,9 +325,9 @@ fun TournamentScreen(
 
             Divider()
 
-            // История партий.
+            // История партий (колхоз не показываем — итоги уже в шапке).
             val finishedGames = ui.games.filter { it.status == "finished" }
-            if (finishedGames.isNotEmpty()) {
+            if (finishedGames.isNotEmpty() && !isKolkhozMode) {
                 Column(
                     Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
