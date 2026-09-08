@@ -111,13 +111,19 @@ class TournamentViewModel(
             // Task 5 fix: если локально мы уже пометили игру как finished
             // (клиент нажал «Партия окончена»), а сервер ещё не отдал
             // обновление (finish_game op в outbox), — предпочитаем локальную
-            // версию с winnerParticipantId. Иначе refresh «размораживает»
-            // партию обратно в active, и 🏆 победитель пропадает из истории.
+            // версию со scores. Иначе refresh «размораживает» партию обратно
+            // в active, и очки сбрасываются.
+            // Матч по id И по orderIndex — на случай когда локальный id (< 0)
+            // уже ремаппился на серверный, и localFinished[sg.id] не находит.
             val localFinished: Map<Long, GameDto> = _ui.value.games
-                .filter { it.status == "finished" && it.winnerParticipantId != null }
+                .filter { it.status == "finished" }
                 .associateBy { it.id }
+            val localFinishedByOrderIndex: Map<Int, GameDto> = _ui.value.games
+                .filter { it.status == "finished" }
+                .associateBy { it.orderIndex }
             val mergedGames = serverGames.map { sg ->
-                localFinished[sg.id]?.takeIf { sg.status != "finished" || sg.winnerParticipantId == null } ?: sg
+                val lf = localFinished[sg.id] ?: localFinishedByOrderIndex[sg.orderIndex]
+                lf?.takeIf { sg.status != "finished" || sg.winnerParticipantId == null } ?: sg
             } + localUnsynced
             val currentLocal = _ui.value.currentGame
             val active = when {

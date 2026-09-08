@@ -180,13 +180,15 @@ fun TournamentScreen(
                 ui.currentGame?.scores?.associate { it.participantId to it.points } ?: emptyMap()
             val scoreboardScores = if (isKolkhozMode) {
                 val acc = mutableMapOf<Long, Int>()
-                // Завершённые партии — их финальные очки актуальны в ui.games.
+                // Завершённые партии — их финальные очки (preserved через localFinished в VM).
                 ui.games.filter { it.status == "finished" }.forEach { g ->
                     g.scores.forEach { s -> acc[s.participantId] = (acc[s.participantId] ?: 0) + s.points }
                 }
-                // Текущая активная партия — берём из currentGameScores, пересчитанных
-                // из ударов (ui.games для active-партии содержит stale scores).
-                currentGameScores.forEach { (pid, score) -> acc[pid] = (acc[pid] ?: 0) + score }
+                // Текущая АКТИВНАЯ партия — берём из currentGameScores (пересчитано из ударов).
+                // Если партия уже finished — она уже в ui.games выше, не добавляем повторно.
+                if (ui.currentGame?.status == "active") {
+                    currentGameScores.forEach { (pid, score) -> acc[pid] = (acc[pid] ?: 0) + score }
+                }
                 acc
             } else {
                 currentGameScores
