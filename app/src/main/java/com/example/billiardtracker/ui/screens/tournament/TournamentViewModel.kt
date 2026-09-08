@@ -165,12 +165,27 @@ class TournamentViewModel(
                     })
                 }
             }
+            // Колхоз: при первом refresh (после перезапуска приложения)
+            // kolkhozFinishedScores пуст — восстанавливаем по выстрелам завершённых партий.
+            // Если уже непустой (данные из текущей сессии) — не трогаем.
+            val kolkhozFinished = if (t.gameType == "kolkhoz" && _ui.value.kolkhozFinishedScores.isEmpty()) {
+                val acc = mutableMapOf<Long, Int>()
+                for (g in mergedGames.filter { it.status == "finished" }) {
+                    gameRepo.listShots(g.id).getOrElse { emptyList() }.forEach { s ->
+                        acc[s.participantId] = (acc[s.participantId] ?: 0) + s.pointsDelta
+                    }
+                }
+                acc
+            } else {
+                _ui.value.kolkhozFinishedScores
+            }
             _ui.value = _ui.value.copy(
                 loading = false,
                 tournament = t,
                 games = mergedGames,
                 currentGame = activeWithScores,
                 currentGameShots = shots,
+                kolkhozFinishedScores = kolkhozFinished,
             )
         }.onFailure {
             _ui.value = _ui.value.copy(loading = false, error = it.message)
