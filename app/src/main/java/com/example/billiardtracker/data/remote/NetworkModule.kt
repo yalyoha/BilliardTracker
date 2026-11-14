@@ -17,6 +17,7 @@ object NetworkModule {
         baseUrl: String,
         userPrefs: UserPrefs,
         devLoggerProvider: () -> DevLogger? = { null },
+        authenticator: okhttp3.Authenticator? = null,
     ): Retrofit {
         val logging = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BASIC
@@ -25,6 +26,7 @@ object NetworkModule {
             .addInterceptor(AuthInterceptor(userPrefs))
             .addInterceptor(DevLogInterceptor(devLoggerProvider))
             .addInterceptor(logging)
+            .apply { authenticator?.let { authenticator(it) } }
             .build()
         return Retrofit.Builder()
             .baseUrl(baseUrl)

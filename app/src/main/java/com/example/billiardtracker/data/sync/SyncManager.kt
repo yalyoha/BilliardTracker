@@ -48,11 +48,14 @@ class SyncManager(
     private val tokenProvider: suspend () -> String?,
     private val userPrefs: com.example.billiardtracker.data.prefs.UserPrefs? = null,
     private val devLoggerProvider: () -> com.example.billiardtracker.data.telemetry.DevLogger? = { null },
+    private val authenticator: okhttp3.Authenticator? = null,
 ) {
     private fun devlog(action: String, ok: Boolean? = null, httpCode: Int? = null, err: String? = null, payload: Map<String, Any?>? = null) {
         devLoggerProvider()?.log(kind = "sync", action = action, ok = ok, httpCode = httpCode, err = err, payload = payload)
     }
-    private val http = OkHttpClient()
+    private val http = OkHttpClient.Builder()
+        .apply { authenticator?.let { authenticator(it) } }
+        .build()
     private val syncMutex = Mutex()
 
     // Broadcast: local id → server id. Слушатели (TeamState / ViewModels)
@@ -168,7 +171,7 @@ class SyncManager(
                 if (passIdx == 0) devlog("drain-start", payload = mapOf("pending" to ops.size))
                 val countBefore = ops.size
                 for (op in ops) {
-                    try { executeOne(op) } catch (t: Throwable) {
+                    try { executeOne(op, ops) } catch (t: Throwable) {
                         devlog("op-exception", ok = false, err = t.message,
                             payload = mapOf("kind" to op.kind, "opId" to op.opId))
                     }
@@ -248,7 +251,38 @@ class SyncManager(
         }
     }
 
-    private suspend fun executeOne(op: OutboxOpEntity): Boolean {
+    /**
+     * Op ждёт серверный id зависимости (встречи/партии/состава), но ни
+     * serverId, ни remap'а, ни pending-op'а, который этот id создаст, нет —
+     * значит не дождётся никогда (создание отменено/отклонено, entity удалена).
+     * Без этой проверки такие ops крутились в drain бесконечно
+     * (op-dep-not-ready ×30k/день, user 30, сентябрь–ноябрь 2026).
+     */
+    private suspend fun isOrphan(op: OutboxOpEntity, pending: List<OutboxOpEntity>): Boolean {
+        val tid = op.localTournamentId
+        if (tid != null && tid < 0 && op.kind != "create_tournament") {
+            val resolvable = tournamentDao.getById(tid)?.serverId != null ||
+                tournamentIdRemap[tid] != null ||
+                pending.any { it.kind == "create_tournament" && it.localTournamentId == tid }
+            if (!resolvable) return true
+        }
+        val gid = op.localGameId
+        if (gid != null && gid < 0 && op.kind != "start_game") {
+            val resolvable = gameDao.getById(gid)?.serverId != null ||
+                gameIdRemap[gid] != null ||
+                pending.any { it.kind == "start_game" && it.localGameId == gid }
+            if (!resolvable) return true
+        }
+        val teamId = op.localTeamId
+        if (teamId != null && teamId < 0 && op.kind != "create_team") {
+            val resolvable = teamDao.getById(teamId)?.serverId != null ||
+                pending.any { it.kind == "create_team" && it.localTeamId == teamId }
+            if (!resolvable) return true
+        }
+        return false
+    }
+
+    private suspend fun executeOne(op: OutboxOpEntity, pending: List<OutboxOpEntity> = emptyList()): Boolean {
         val jwt = tokenProvider()
         if (jwt == null) {
             devlog("op-no-jwt", ok = false, payload = mapOf("kind" to op.kind, "opId" to op.opId))
@@ -259,6 +293,17 @@ class SyncManager(
         // ещё не синкнута — пропускаем op, retry позже.
         val resolvedEndpoint = resolveEndpoint(op)
         if (resolvedEndpoint == null) {
+            // Снимок pending мог устареть внутри прохода — перечитываем только
+            // когда по снимку op выглядит сиротой (редкий путь).
+            if (isOrphan(op, pending) && isOrphan(op, outboxDao.pendingOps())) {
+                outboxDao.update(op.copy(executed = true, lastError = "orphan: dependency will never sync"))
+                devlog("op-orphan-dropped", ok = false, payload = mapOf(
+                    "kind" to op.kind, "opId" to op.opId,
+                    "localTeamId" to op.localTeamId, "localTournamentId" to op.localTournamentId,
+                    "localGameId" to op.localGameId,
+                ))
+                return true
+            }
             devlog("op-dep-not-ready", payload = mapOf(
                 "kind" to op.kind, "opId" to op.opId,
                 "localTeamId" to op.localTeamId, "localTournamentId" to op.localTournamentId,

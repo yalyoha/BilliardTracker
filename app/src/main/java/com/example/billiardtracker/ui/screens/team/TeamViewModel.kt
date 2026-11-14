@@ -95,21 +95,31 @@ class TeamViewModel(
     fun setActive(id: Long) { teamState.setActiveTeam(id) }
     fun clearError() { _draft.value = _draft.value.copy(error = null) }
 
+    // Защита от двойного тапа «Сохранить»: второй вызов, пока первый ещё
+    // создаёт состав, игнорируется (иначе в outbox попадали два create_team).
+    private var creatingTeam = false
+
     fun createTeam(name: String) {
+        if (creatingTeam) return
+        creatingTeam = true
         viewModelScope.launch {
-            teamState.addTeam(name).fold(
-                onSuccess = { team ->
-                    // Defense: sync мог успеть переопределить local id на server id
-                    // между addTeam и fold (гонка suspend внутри addTeam.map). Если
-                    // возвращённого team.id уже нет в _teams — берём последнюю
-                    // добавленную команду (addTeam кладёт в конец списка).
-                    val teams = teamState.teams.value
-                    val actualId = if (teams.any { it.id == team.id }) team.id
-                                   else teams.lastOrNull()?.id ?: team.id
-                    _draft.value = _draft.value.copy(expandedTeamId = actualId)
-                },
-                onFailure = { e -> _draft.value = _draft.value.copy(error = e.message ?: "Не удалось создать состав") },
-            )
+            try {
+                teamState.addTeam(name).fold(
+                    onSuccess = { team ->
+                        // Defense: sync мог успеть переопределить local id на server id
+                        // между addTeam и fold (гонка suspend внутри addTeam.map). Если
+                        // возвращённого team.id уже нет в _teams — берём последнюю
+                        // добавленную команду (addTeam кладёт в конец списка).
+                        val teams = teamState.teams.value
+                        val actualId = if (teams.any { it.id == team.id }) team.id
+                                       else teams.lastOrNull()?.id ?: team.id
+                        _draft.value = _draft.value.copy(expandedTeamId = actualId)
+                    },
+                    onFailure = { e -> _draft.value = _draft.value.copy(error = e.message ?: "Не удалось создать состав") },
+                )
+            } finally {
+                creatingTeam = false
+            }
         }
     }
 

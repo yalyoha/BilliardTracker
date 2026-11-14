@@ -73,8 +73,12 @@ class TeamState(
                 // Merge: сохраняем локальные unsynced команды (id < 0), которые
                 // сервер ещё не знает — иначе legit token-switch с pending sync
                 // тоже их потеряет. Пары local↔server резолвит teamIdRemaps.
+                // Дедуп по id: при офлайне/401 repo.list() читает из Room, где
+                // локальные (id < 0) уже есть, — без фильтра каждый новый
+                // состав показывался дважды (жалоба заказчика 2026-11-05).
                 val serverTeams = list.map { it.toDomain() }
-                val localUnsynced = _teams.value.filter { it.id < 0 }
+                val known = serverTeams.mapTo(HashSet()) { it.id }
+                val localUnsynced = _teams.value.filter { it.id < 0 && it.id !in known }
                 _teams.value = serverTeams + localUnsynced
                 // Убедиться что active team существует в новом списке; иначе
                 // выбрать первый или сбросить.
@@ -207,7 +211,8 @@ class TeamState(
         val tokenId = userPrefs.getActiveTokenId() ?: return
         val list = repo.list(tokenId).getOrElse { return }
         val serverTeams = list.map { it.toDomain() }
-        val localUnsynced = _teams.value.filter { it.id < 0 }
+        val known = serverTeams.mapTo(HashSet()) { it.id }
+        val localUnsynced = _teams.value.filter { it.id < 0 && it.id !in known }
         _teams.value = serverTeams + localUnsynced
     }
 }

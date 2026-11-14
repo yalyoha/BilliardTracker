@@ -129,10 +129,18 @@ class AppContainer(context: Context) {
     // ссылается на DevLogger. Решаем через lambda-provider.
     private var _devLogger: com.example.billiardtracker.data.telemetry.DevLogger? = null
 
+    // При 401 перерегистрируется по сохранённым phone+name и повторяет запрос.
+    val tokenRefresher = com.example.billiardtracker.data.remote.TokenRefresher(
+        baseUrl = "https://billiardtracker.alekseylosev.ru/",
+        prefs = userPrefs,
+        onEvent = { action, ok, code -> _devLogger?.log(kind = "auth", action = action, ok = ok, httpCode = code) },
+    )
+
     val retrofit = NetworkModule.provideRetrofit(
         baseUrl = "https://billiardtracker.alekseylosev.ru/",
         userPrefs = userPrefs,
         devLoggerProvider = { _devLogger },
+        authenticator = tokenRefresher,
     )
     val apiService: ApiService = retrofit.create(ApiService::class.java)
 
@@ -159,6 +167,7 @@ class AppContainer(context: Context) {
             tokenProvider = { userPrefs.getToken() },
             userPrefs = userPrefs,
             devLoggerProvider = { _devLogger },
+            authenticator = tokenRefresher,
         )
 
     // ----- Repos (order matters: everything below uses infrastructure above) -----
